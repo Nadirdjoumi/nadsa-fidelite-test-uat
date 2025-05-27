@@ -8,11 +8,7 @@ import {
   query,
   where,
   getDocs,
-  Timestamp,
-  doc,
-  setDoc,
-  getDoc,
-  orderBy
+  Timestamp
 } from 'firebase/firestore';
 
 const Dashboard = ({ user }) => {
@@ -21,65 +17,33 @@ const Dashboard = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState('today');
 
-  const [usersList, setUsersList] = useState([]);
-  const [usedPointsMap, setUsedPointsMap] = useState({});
-
   const isAdmin = user?.email === 'admin@admin.com';
 
-  // --- Ajout d'une fonction pour récupérer tous les users (admin)
-  const fetchUsers = async () => {
-    const q = query(collection(db, 'users'), orderBy('lastName'));
-    const snapshot = await getDocs(q);
-    const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    setUsersList(usersData);
-  };
+  // Extraire prénom depuis user.displayName ou email
+  const prenom = user?.displayName
+    ? user.displayName.split(' ')[0]
+    : user?.email
+      ? user.email.split('@')[0]
+      : 'Utilisateur';
 
-  // --- Fonction pour récupérer les points utilisés de tous les users (admin)
-  const fetchUsedPointsForUsers = async (users) => {
-    const map = {};
-    for (const u of users) {
-      const docRef = doc(db, 'usedPoints', u.id);
-      const docSnap = await getDoc(docRef);
-      map[u.id] = docSnap.exists() ? docSnap.data().used : 0;
-    }
-    setUsedPointsMap(map);
-  };
+  // Fonction pour calculer points et remise selon montant
+  const calcPoints = montant => Math.floor(montant / 100);
+  // remise = points * 1.3 arrondi à la dizaine la plus proche
+  const calcRemise = points => Math.round(points * 1.3 / 10) * 10;
 
-  // --- Fonction pour récupérer commandes
-  const fetchOrders = async () => {
-    setLoading(true);
-    let q;
-    if (isAdmin) {
-      q = query(collection(db, 'orders'));
-    } else {
-      q = query(collection(db, 'orders'), where('userId', '==', user.uid));
-    }
-    const snapshot = await getDocs(q);
-    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    setOrders(data);
-    setLoading(false);
-  };
-
-  // --- Fonction pour "utiliser la remise" (admin)
-  const handleUseDiscountForUser = async (userId) => {
-    // Calcule la somme totale des commandes du user
-    const userOrders = orders.filter(o => o.userId === userId);
-    const total = userOrders.reduce((sum, o) => sum + o.amount, 0);
-    // Enregistre cette valeur dans usedPoints
-    await setDoc(doc(db, 'usedPoints', userId), {
-      used: total,
-      updatedAt: Timestamp.now()
-    });
-    await fetchUsedPointsForUsers(usersList);
-  };
-
-  // --- Fonction pour "ajouter une commande" (client)
   const handleAddOrder = async () => {
-    if (!amount) return;
+    if (!amount || isNaN(amount)) return;
     setLoading(true);
+
+    const montantInt = Math.floor(parseFloat(amount)); // arrondi sans décimales
+    const points = calcPoints(montantInt);
+    const remise = calcRemise(points);
+
     await addDoc(collection(db, 'orders'), {
       userId: user.uid,
-      amount: parseFloat(amount),
+      amount: montantInt,
+      points,
+      remise,
       createdAt: Timestamp.now()
     });
     setAmount('');
@@ -87,56 +51,64 @@ const Dashboard = ({ user }) => {
     setLoading(false);
   };
 
-  // --- Logout
+  const fetchOrders = async () => {
+    setLoading(true);
+    let q;
+
+    if (isAdmin) {
+      q = query(collection(db, 'orders'));
+    } else {
+      q = query(collection(db, 'orders'), where('userId', '==', user.uid));
+    }
+
+    const snapshot = await getDocs(q);
+    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    setOrders(data);
+    setLoading(false);
+  };
+
   const logout = () => {
     signOut(auth);
   };
 
-  // --- useEffect pour récupérer les données selon user/admin
   useEffect(() => {
-    if (user) {
-      fetchOrders();
-      if (isAdmin) {
-        fetchUsers().then(fetchedUsers => {
-          fetchUsedPointsForUsers(fetchedUsers);
-        });
-      } else {
-        // Pour client, récupérer usedPoints de lui-même
-        const fetchUsedPoints = async () => {
-          const docRef = doc(db, 'usedPoints', user.uid);
-          const docSnap = await getDoc(docRef);
-          setUsedPointsMap({
-            [user.uid]: docSnap.exists() ? docSnap.data().used : 0
-          });
-        };
-        fetchUsedPoints();
-      }
-    }
+    if (user) fetchOrders();
   }, [user]);
 
-  // --- Calculs pour affichage
+  // Calcul dates
+  const startOfToday = new Date();
+  startOfToday.setHours(0,0,0,0);
 
-  // Pour client uniquement : commandes du jour, total aujourd'hui
-  const today = new Date().toISOString().split('T')[0];
-  const todayOrders = orders.filter(o => o.createdAt?.toDate && o.createdAt.toDate().toISOString().split('T')[0] === today);
-  const totalToday = todayOrders.reduce((sum, o) => sum + o.amount, 0);
+  // Filtrer commandes du jour
+  const todayOrders = orders.filter(o => {
+    if (!o.createdAt?.toDate) return false;
+    const orderDate = o.createdAt.toDate();
+    return orderDate >= startOfToday;
+  });
 
-  if (!isAdmin) {
-    const totalAll = orders.reduce((sum, o) => sum + o.amount, 0);
-    const used = usedPointsMap[user.uid] || 0;
-    const netPoints = totalAll - used;
-    const discount = (netPoints / 100 * 5).toFixed(2);
+  // Total aujourd’hui (utilisateur seulement)
+  const totalToday = todayOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
 
-    return (
-      <div style={styles.container}>
-        <h2 style={styles.title}>Bienvenue {user.email}</h2>
-        <button onClick={logout} style={styles.logout}>Se déconnecter</button>
+  // Points cumulés (depuis début)
+  const totalPoints = orders.reduce((sum, o) => sum + (o.points || 0), 0);
 
+  // Remise cumulée (depuis début)
+  const totalRemise = orders.reduce((sum, o) => sum + (o.remise || 0), 0);
+
+  // Affichage commandes selon rôle + vue admin
+  const displayedOrders = isAdmin && view === 'today' ? todayOrders : orders;
+
+  return (
+    <div style={styles.container}>
+      <h2 style={styles.title}>Bienvenue {prenom}</h2>
+      <button onClick={logout} style={styles.logout}>Se déconnecter</button>
+
+      {!isAdmin && (
         <div style={styles.box}>
           <h3 style={styles.subtitle}>Ajouter une commande</h3>
           <input
             type="number"
-            placeholder="Montant €"
+            placeholder="Montant en DA"
             value={amount}
             onChange={e => setAmount(e.target.value)}
             style={styles.input}
@@ -146,118 +118,47 @@ const Dashboard = ({ user }) => {
           </button>
 
           <div style={styles.stats}>
-            <p><strong>Total aujourd'hui :</strong> {totalToday.toFixed(2)} €</p>
-            <p><strong>Points cumulés :</strong> {netPoints} pts</p>
-            <p><strong>Remise obtenue :</strong> {discount} €</p>
+            <p><strong>Total aujourd'hui :</strong> {totalToday} DA</p>
+            <p><strong>Points cumulés :</strong> {totalPoints} pts</p>
+            <p><strong>Remise obtenue :</strong> {totalRemise} DA</p>
           </div>
         </div>
+      )}
 
+      {isAdmin && (
         <div style={styles.box}>
-          <h3 style={styles.subtitle}>Historique</h3>
-          {orders.length === 0 && <p>Aucune commande.</p>}
-          <ul style={styles.list}>
-            {orders.map(o => (
-              <li key={o.id} style={styles.listItem}>
-                <div>
-                  <strong>{o.amount} €</strong>
-                  <br />
-                  <small>{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'Date inconnue'}</small>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
+            <button
+              onClick={() => setView('today')}
+              style={{ ...styles.button, backgroundColor: view === 'today' ? '#7B2233' : '#ccc' }}
+            >
+              Commandes du jour
+            </button>
+            <button
+              onClick={() => setView('all')}
+              style={{ ...styles.button, backgroundColor: view === 'all' ? '#7B2233' : '#ccc' }}
+            >
+              Toutes les commandes
+            </button>
+          </div>
         </div>
-      </div>
-    );
-  }
-
-  // --- Pour admin : afficher liste utilisateurs + points + remise + bouton utiliser remise
-
-  // Fonction pour calculer total commandes et points d'un user
-  const getUserTotals = (userId) => {
-    const userOrders = orders.filter(o => o.userId === userId);
-    const total = userOrders.reduce((sum, o) => sum + o.amount, 0);
-    const used = usedPointsMap[userId] || 0;
-    const netPoints = total - used;
-    const discount = (netPoints / 100 * 5).toFixed(2);
-    return { total, used, netPoints, discount };
-  };
-
-  return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>Bienvenue Admin</h2>
-      <button onClick={logout} style={styles.logout}>Se déconnecter</button>
+      )}
 
       <div style={styles.box}>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
-          <button onClick={() => setView('today')} style={{ ...styles.button, background: view === 'today' ? '#2196f3' : '#ccc' }}>Commandes du jour</button>
-          <button onClick={() => setView('all')} style={{ ...styles.button, background: view === 'all' ? '#2196f3' : '#ccc' }}>Toutes les commandes</button>
-        </div>
-      </div>
-
-      <div style={styles.box}>
-        <h3 style={styles.subtitle}>Liste des clients</h3>
-        {usersList.length === 0 && <p>Aucun client trouvé.</p>}
+        <h3 style={styles.subtitle}>{isAdmin ? (view === 'today' ? 'Commandes du jour' : 'Toutes les commandes') : 'Historique'}</h3>
+        {displayedOrders.length === 0 && <p>Aucune commande.</p>}
         <ul style={styles.list}>
-          {usersList.map(u => {
-            const totals = getUserTotals(u.id);
-            return (
-              <li key={u.id} style={styles.listItem}>
-                <div>
-                  <strong>{u.firstName} {u.lastName} ({u.email})</strong>
-                  <br />
-                  <small>Points cumulés : {totals.netPoints} pts</small>
-                  <br />
-                  <small>Remise obtenue : {totals.discount} €</small>
-                </div>
-                <button
-                  style={{ ...styles.button, background: '#f44336', padding: '6px 12px', fontSize: 14 }}
-                  onClick={() => handleUseDiscountForUser(u.id)}
-                  disabled={totals.netPoints <= 0}
-                >
-                  Utiliser la remise
-                </button>
-              </li>
-            );
-          })}
+          {displayedOrders.map(o => (
+            <li key={o.id} style={styles.listItem}>
+              <div>
+                <strong>{o.amount} DA</strong>
+                <br />
+                <small>{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'Date inconnue'}</small>
+              </div>
+              {isAdmin && <small>Client: {o.userId}</small>}
+            </li>
+          ))}
         </ul>
-      </div>
-
-      <div style={styles.box}>
-        <h3 style={styles.subtitle}>{view === 'today' ? 'Commandes du jour' : 'Toutes les commandes'}</h3>
-        {view === 'today' ? (
-          <>
-            {orders.filter(o => o.createdAt?.toDate && o.createdAt.toDate().toISOString().split('T')[0] === today).length === 0 && <p>Aucune commande.</p>}
-            <ul style={styles.list}>
-              {orders.filter(o => o.createdAt?.toDate && o.createdAt.toDate().toISOString().split('T')[0] === today).map(o => (
-                <li key={o.id} style={styles.listItem}>
-                  <div>
-                    <strong>{o.amount} €</strong>
-                    <br />
-                    <small>{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'Date inconnue'}</small>
-                  </div>
-                  <small>Client: {o.userId}</small>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <>
-            {orders.length === 0 && <p>Aucune commande.</p>}
-            <ul style={styles.list}>
-              {orders.map(o => (
-                <li key={o.id} style={styles.listItem}>
-                  <div>
-                    <strong>{o.amount} €</strong>
-                    <br />
-                    <small>{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'Date inconnue'}</small>
-                  </div>
-                  <small>Client: {o.userId}</small>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
       </div>
     </div>
   );
@@ -266,36 +167,44 @@ const Dashboard = ({ user }) => {
 const styles = {
   container: {
     padding: 20,
-    fontFamily: 'sans-serif',
-    maxWidth: 700,
+    fontFamily: 'Arial, sans-serif',
+    maxWidth: 600,
     margin: '0 auto',
-    background: '#f9f9f9',
-    minHeight: '100vh'
+    background: '#fff5f7', // rose pâle clair pour fond
+    minHeight: '100vh',
   },
   title: {
-    fontSize: 22,
+    fontSize: 26,
     textAlign: 'center',
-    marginBottom: 10
+    marginBottom: 20,
+    color: '#7B2233', // bordeaux foncé
+    fontWeight: 'bold',
   },
   logout: {
     display: 'block',
     margin: '10px auto 30px auto',
-    background: '#bbb',
+    background: '#7B2233',
     border: 'none',
-    padding: 10,
-    borderRadius: 6,
-    cursor: 'pointer'
+    padding: '12px 30px',
+    borderRadius: 30,
+    color: 'white',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    fontSize: 16,
+    transition: 'background-color 0.3s ease',
   },
   box: {
     background: 'white',
-    padding: 15,
-    borderRadius: 10,
+    padding: 20,
+    borderRadius: 15,
     marginBottom: 30,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
   },
   subtitle: {
-    fontSize: 18,
-    marginBottom: 10
+    fontSize: 20,
+    marginBottom: 15,
+    color: '#7B2233',
+    fontWeight: '600',
   },
   input: {
     width: '100%',
@@ -303,36 +212,44 @@ const styles = {
     fontSize: 16,
     marginBottom: 10,
     borderRadius: 6,
-    border: '1px solid #ccc'
+    border: '1px solid #ccc',
+    boxSizing: 'border-box'
   },
   button: {
     width: '100%',
-    padding: 12,
+    padding: 14,
     fontSize: 16,
-    background: '#4caf50',
+    backgroundColor: '#7B2233',
     color: 'white',
     border: 'none',
-    borderRadius: 6,
-    cursor: 'pointer'
+    borderRadius: 30,
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    transition: 'background-color 0.3s ease',
   },
   stats: {
-    marginTop: 15,
-    lineHeight: 1.6
+    marginTop: 20,
+    lineHeight: 1.6,
+    fontSize: 16,
+    color: '#333',
   },
   list: {
     listStyle: 'none',
     padding: 0,
-    marginTop: 10
+    marginTop: 15,
   },
   listItem: {
-    background: '#eee',
-    marginBottom: 10,
-    padding: 10,
-    borderRadius: 6,
+    background: '#f7d9dc', // rose clair
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 10,
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center'
-  }
+    alignItems: 'center',
+    color: '#7B2233',
+    fontWeight: '600',
+    boxShadow: '0 2px 6px rgba(123, 34, 51, 0.15)',
+  },
 };
 
 export default Dashboard;

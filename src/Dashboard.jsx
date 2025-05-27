@@ -1,3 +1,4 @@
+// src/Dashboard.jsx
 import React, { useEffect, useState } from 'react';
 import { auth, db } from './firebase';
 import { signOut } from 'firebase/auth';
@@ -18,26 +19,29 @@ const Dashboard = ({ user }) => {
 
   const isAdmin = user?.email === 'admin@admin.com';
 
+  // Extraire prénom depuis user.displayName ou email
   const prenom = user?.displayName
     ? user.displayName.split(' ')[0]
     : user?.email
       ? user.email.split('@')[0]
       : 'Utilisateur';
 
+  // Fonction pour calculer points et remise selon montant
+  const calcPoints = montant => Math.floor(montant / 100);
+  // remise = points * 1.3 arrondi à la dizaine la plus proche
+  const calcRemise = points => Math.round(points * 1.3 / 10) * 10;
+
   const handleAddOrder = async () => {
-    if (!amount) return;
+    if (!amount || isNaN(amount)) return;
     setLoading(true);
 
-    // Convertir en entier arrondi (sans centimes), en DA
-    const montantDA = Math.round(Number(amount));
-
-    // Calculs
-    const points = Math.floor(montantDA / 100);
-    const remise = Math.round(points * 1.3 / 10) * 10; // arrondi à la dizaine
+    const montantInt = Math.floor(parseFloat(amount)); // arrondi sans décimales
+    const points = calcPoints(montantInt);
+    const remise = calcRemise(points);
 
     await addDoc(collection(db, 'orders'), {
       userId: user.uid,
-      amount: montantDA,
+      amount: montantInt,
       points,
       remise,
       createdAt: Timestamp.now()
@@ -71,15 +75,27 @@ const Dashboard = ({ user }) => {
     if (user) fetchOrders();
   }, [user]);
 
-  const today = new Date().toISOString().split('T')[0];
-  const todayOrders = orders.filter(o => o.createdAt?.toDate && o.createdAt.toDate().toISOString().split('T')[0] === today);
-  const totalToday = todayOrders.reduce((sum, o) => sum + o.amount, 0);
-  const totalAll = orders.reduce((sum, o) => sum + o.amount, 0);
+  // Calcul dates
+  const startOfToday = new Date();
+  startOfToday.setHours(0,0,0,0);
 
-  // Points et remise cumulés sur toutes les commandes
+  // Filtrer commandes du jour
+  const todayOrders = orders.filter(o => {
+    if (!o.createdAt?.toDate) return false;
+    const orderDate = o.createdAt.toDate();
+    return orderDate >= startOfToday;
+  });
+
+  // Total aujourd’hui (utilisateur seulement)
+  const totalToday = todayOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
+
+  // Points cumulés (depuis début)
   const totalPoints = orders.reduce((sum, o) => sum + (o.points || 0), 0);
+
+  // Remise cumulée (depuis début)
   const totalRemise = orders.reduce((sum, o) => sum + (o.remise || 0), 0);
 
+  // Affichage commandes selon rôle + vue admin
   const displayedOrders = isAdmin && view === 'today' ? todayOrders : orders;
 
   return (
@@ -96,7 +112,6 @@ const Dashboard = ({ user }) => {
             value={amount}
             onChange={e => setAmount(e.target.value)}
             style={styles.input}
-            min={0}
           />
           <button onClick={handleAddOrder} style={styles.button} disabled={loading}>
             {loading ? 'Envoi...' : 'Ajouter'}
@@ -115,13 +130,13 @@ const Dashboard = ({ user }) => {
           <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
             <button
               onClick={() => setView('today')}
-              style={{ ...styles.button, backgroundColor: view === 'today' ? '#7B2233' : '#ccc', width: 'auto', padding: '10px 20px' }}
+              style={{ ...styles.button, backgroundColor: view === 'today' ? '#7B2233' : '#ccc' }}
             >
               Commandes du jour
             </button>
             <button
               onClick={() => setView('all')}
-              style={{ ...styles.button, backgroundColor: view === 'all' ? '#7B2233' : '#ccc', width: 'auto', padding: '10px 20px' }}
+              style={{ ...styles.button, backgroundColor: view === 'all' ? '#7B2233' : '#ccc' }}
             >
               Toutes les commandes
             </button>
@@ -151,51 +166,54 @@ const Dashboard = ({ user }) => {
 
 const styles = {
   container: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
     padding: 20,
     fontFamily: 'Arial, sans-serif',
     maxWidth: 600,
     margin: '0 auto',
-    backgroundColor: '#fff5f7',
+    background: '#fff5f7', // rose pâle clair pour fond
     minHeight: '100vh',
-    boxSizing: 'border-box',
-  },
-  box: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 30,
-    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
-    width: '100%',
-    maxWidth: 400,
-    boxSizing: 'border-box',
   },
   title: {
     fontSize: 26,
     textAlign: 'center',
     marginBottom: 20,
-    color: '#7B2233',
+    color: '#7B2233', // bordeaux foncé
     fontWeight: 'bold',
-    width: '100%',
+  },
+  logout: {
+    display: 'block',
+    margin: '10px auto 30px auto',
+    background: '#7B2233',
+    border: 'none',
+    padding: '12px 30px',
+    borderRadius: 30,
+    color: 'white',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    fontSize: 16,
+    transition: 'background-color 0.3s ease',
+  },
+  box: {
+    background: 'white',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 30,
+    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
   },
   subtitle: {
     fontSize: 20,
     marginBottom: 15,
     color: '#7B2233',
-    fontWeight: 'bold',
-    textAlign: 'center',
+    fontWeight: '600',
   },
   input: {
     width: '100%',
-    padding: 12,
+    padding: 10,
     fontSize: 16,
-    marginBottom: 15,
+    marginBottom: 10,
     borderRadius: 6,
     border: '1px solid #ccc',
-    boxSizing: 'border-box',
+    boxSizing: 'border-box'
   },
   button: {
     width: '100%',
@@ -209,34 +227,28 @@ const styles = {
     fontWeight: 'bold',
     transition: 'background-color 0.3s ease',
   },
-  logout: {
-    backgroundColor: '#b22222',
-    color: 'white',
-    border: 'none',
-    padding: '10px 20px',
-    borderRadius: 30,
-    cursor: 'pointer',
-    alignSelf: 'flex-end',
-    marginBottom: 20,
-    fontWeight: 'bold',
-  },
   stats: {
-    marginTop: 15,
+    marginTop: 20,
+    lineHeight: 1.6,
     fontSize: 16,
     color: '#333',
   },
   list: {
-    listStyleType: 'none',
-    paddingLeft: 0,
-    maxHeight: 300,
-    overflowY: 'auto',
+    listStyle: 'none',
+    padding: 0,
+    marginTop: 15,
   },
   listItem: {
-    padding: 10,
-    borderBottom: '1px solid #ddd',
+    background: '#f7d9dc', // rose clair
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 10,
     display: 'flex',
     justifyContent: 'space-between',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    color: '#7B2233',
+    fontWeight: '600',
+    boxShadow: '0 2px 6px rgba(123, 34, 51, 0.15)',
   },
 };
 

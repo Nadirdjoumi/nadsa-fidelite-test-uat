@@ -193,7 +193,12 @@ const Dashboard = ({ user }) => {
             <div key={userId} style={{ marginBottom: 30 }}>
 
 	<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#7B2233', marginBottom: 8 }}>
-  <span><strong>Client :</strong> {usersCache[userId] || userId}</span>
+ 
+ <span>
+  <strong>Client :</strong>{' '}
+  <strong>{usersCache[userId] || userId}</strong>
+</span>
+
   <span><strong>{userOrders.reduce((sum, o) => sum + (o.remise || 0), 0)} DA</strong></span>
 </div>
 

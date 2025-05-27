@@ -25,8 +25,8 @@ const Dashboard = ({ user }) => {
   const prenom = user?.displayName
     ? user.displayName.split(' ')[0]
     : user?.email
-    ? user.email.split('@')[0]
-    : 'Utilisateur';
+      ? user.email.split('@')[0]
+      : 'Utilisateur';
 
   const calcPoints = montant => Math.floor(montant / 100);
   const calcRemise = points => Math.round((points * 1.3) / 10) * 10;
@@ -47,7 +47,6 @@ const Dashboard = ({ user }) => {
       remise,
       createdAt: Timestamp.now(),
     });
-
     setAmount('');
     fetchOrders();
     setLoading(false);
@@ -69,32 +68,14 @@ const Dashboard = ({ user }) => {
     if (isAdmin) {
       const newCache = { ...usersCache };
       for (const order of data) {
-        // if (!newCache[order.userId]) {
-          // try {
-            // const userDoc = await getDoc(doc(db, 'users', order.userId));
-            // newCache[order.userId] = userDoc.exists() ? userDoc.data().email : order.userEmail || 'Inconnu';
-          // } catch (e) {
-            // newCache[order.userId] = 'Erreur';
-          // }
-        // }
-if (!newCache[order.userId]) {
-  try {
-    const userDoc = await getDoc(doc(db, 'users', order.userId));
-    if (userDoc.exists()) {
-      const data = userDoc.data();
-      const prenom = data.prenom || '';
-      const nom = data.nom || '';
-      const wilaya = data.wilaya || '';
-      newCache[order.userId] = `${prenom} ${nom}${wilaya ? ' (' + wilaya + ')' : ''}`.trim() || order.userEmail || 'Inconnu';
-    } else {
-      newCache[order.userId] = order.userEmail || 'Inconnu';
-    }
-  } catch (e) {
-    console.error('Erreur récupération utilisateur :', e);
-    newCache[order.userId] = 'Erreur';
-  }
-}
-
+        if (!newCache[order.userId]) {
+          try {
+            const userDoc = await getDoc(doc(db, 'users', order.userId));
+            newCache[order.userId] = userDoc.exists() ? userDoc.data().email : order.userEmail || 'Inconnu';
+          } catch (e) {
+            newCache[order.userId] = 'Erreur';
+          }
+        }
       }
       setUsersCache(newCache);
     }
@@ -103,7 +84,9 @@ if (!newCache[order.userId]) {
     setLoading(false);
   };
 
-  const logout = () => signOut(auth);
+  const logout = () => {
+    signOut(auth);
+  };
 
   useEffect(() => {
     if (user) fetchOrders();
@@ -123,14 +106,6 @@ if (!newCache[order.userId]) {
   const totalRemise = orders.reduce((sum, o) => sum + (o.remise || 0), 0);
 
   const displayedOrders = isAdmin && view === 'today' ? todayOrders : orders;
-
-  const groupedByUser = isAdmin
-    ? displayedOrders.reduce((acc, order) => {
-        if (!acc[order.userId]) acc[order.userId] = [];
-        acc[order.userId].push(order);
-        return acc;
-      }, {})
-    : {};
 
   return (
     <div style={styles.container}>
@@ -179,58 +154,25 @@ if (!newCache[order.userId]) {
       )}
 
       <div style={styles.box}>
-        <h3 style={styles.subtitle}>
-          {isAdmin ? (view === 'today' ? 'Commandes du jour par client' : 'Toutes les commandes par client') : 'Historique'}
-        </h3>
-
-        {!isAdmin && displayedOrders.length === 0 && <p>Aucune commande.</p>}
-
-        {isAdmin && Object.keys(groupedByUser).length === 0 && <p>Aucune commande.</p>}
-
-        {!isAdmin && (
-          <ul style={styles.list}>
-            {displayedOrders.map(o => (
-              <li key={o.id} style={styles.listItem}>
-                <div>
-                  <strong>{o.amount} DA</strong>
-                  <br />
-                  <small>{o.createdAt?.toDate().toLocaleString() || 'Date inconnue'}</small>
+        <h3 style={styles.subtitle}>{isAdmin ? (view === 'today' ? 'Commandes du jour' : 'Toutes les commandes') : 'Historique'}</h3>
+        {displayedOrders.length === 0 && <p>Aucune commande.</p>}
+        <ul style={styles.list}>
+          {displayedOrders.map(o => (
+            <li key={o.id} style={styles.listItem}>
+              <div>
+                <strong>{o.amount} DA</strong>
+                <br />
+                <small>{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'Date inconnue'}</small>
+              </div>
+              {isAdmin && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <small>Client : {usersCache[o.userId] || o.userEmail || o.userId}</small>
+                  <small>{o.userId}</small>
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {isAdmin &&
-          Object.entries(groupedByUser).map(([userId, userOrders]) => (
-            <div key={userId} style={{ marginBottom: 30 }}>
-              <h4 style={{ color: '#7B2233', marginBottom: 8 }}>
-                Client : {usersCache[userId] || userId}
-              </h4>
-              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
-                <thead>
-                  <tr style={{ background: '#f7d9dc', color: '#7B2233' }}>
-                    <th style={styles.th}>Montant</th>
-                    <th style={styles.th}>Date</th>
-                    <th style={styles.th}>Points</th>
-                    <th style={styles.th}>Remise</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {userOrders.map(order => (
-                    <tr key={order.id}>
-                      <td style={styles.td}>{order.amount} DA</td>
-                      <td style={styles.td}>
-                        {order.createdAt?.toDate().toLocaleString() || 'Date inconnue'}
-                      </td>
-                      <td style={styles.td}>{order.points}</td>
-                      <td style={styles.td}>{order.remise} DA</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+              )}
+            </li>
           ))}
+        </ul>
       </div>
     </div>
   );
@@ -240,7 +182,7 @@ const styles = {
   container: {
     padding: 20,
     fontFamily: 'Arial, sans-serif',
-    maxWidth: 800,
+    maxWidth: 600,
     margin: '0 auto',
     background: '#fff5f7',
     minHeight: '100vh',
@@ -263,6 +205,7 @@ const styles = {
     cursor: 'pointer',
     fontWeight: 'bold',
     fontSize: 16,
+    transition: 'background-color 0.3s ease',
   },
   box: {
     background: 'white',
@@ -284,6 +227,7 @@ const styles = {
     marginBottom: 10,
     borderRadius: 6,
     border: '1px solid #ccc',
+    boxSizing: 'border-box'
   },
   button: {
     width: '100%',
@@ -295,6 +239,7 @@ const styles = {
     borderRadius: 30,
     cursor: 'pointer',
     fontWeight: 'bold',
+    transition: 'background-color 0.3s ease',
   },
   stats: {
     marginTop: 20,
@@ -318,15 +263,6 @@ const styles = {
     color: '#7B2233',
     fontWeight: '600',
     boxShadow: '0 2px 6px rgba(123, 34, 51, 0.15)',
-  },
-  th: {
-    padding: '10px',
-    borderBottom: '1px solid #ddd',
-    textAlign: 'left',
-  },
-  td: {
-    padding: '10px',
-    borderBottom: '1px solid #eee',
   },
 };
 

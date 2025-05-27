@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { auth } from './firebase';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import Dashboard from './Dashboard';
-import Login from './Login';
+import Login from './loginTemp';
 
 const App = () => {
   const [user, setUser] = useState(null);

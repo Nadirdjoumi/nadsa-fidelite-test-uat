@@ -8,9 +8,7 @@ import {
   query,
   where,
   getDocs,
-  Timestamp,
-  getDoc,
-  doc,
+  Timestamp
 } from 'firebase/firestore';
 
 const Dashboard = ({ user }) => {
@@ -18,34 +16,35 @@ const Dashboard = ({ user }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState('today');
-  const [usersCache, setUsersCache] = useState({});
 
   const isAdmin = user?.email === 'admin@admin.com';
 
+  // Extraire prénom depuis user.displayName ou email
   const prenom = user?.displayName
     ? user.displayName.split(' ')[0]
     : user?.email
       ? user.email.split('@')[0]
       : 'Utilisateur';
 
+  // Fonction pour calculer points et remise selon montant
   const calcPoints = montant => Math.floor(montant / 100);
-  const calcRemise = points => Math.round((points * 1.3) / 10) * 10;
+  // remise = points * 1.3 arrondi à la dizaine la plus proche
+  const calcRemise = points => Math.round(points * 1.3 / 10) * 10;
 
   const handleAddOrder = async () => {
     if (!amount || isNaN(amount)) return;
     setLoading(true);
 
-    const montantInt = Math.floor(parseFloat(amount));
+    const montantInt = Math.floor(parseFloat(amount)); // arrondi sans décimales
     const points = calcPoints(montantInt);
     const remise = calcRemise(points);
 
     await addDoc(collection(db, 'orders'), {
       userId: user.uid,
-      userEmail: user.email,
       amount: montantInt,
       points,
       remise,
-      createdAt: Timestamp.now(),
+      createdAt: Timestamp.now()
     });
     setAmount('');
     fetchOrders();
@@ -64,22 +63,6 @@ const Dashboard = ({ user }) => {
 
     const snapshot = await getDocs(q);
     const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    if (isAdmin) {
-      const newCache = { ...usersCache };
-      for (const order of data) {
-        if (!newCache[order.userId]) {
-          try {
-            const userDoc = await getDoc(doc(db, 'users', order.userId));
-            newCache[order.userId] = userDoc.exists() ? userDoc.data().email : order.userEmail || 'Inconnu';
-          } catch (e) {
-            newCache[order.userId] = 'Erreur';
-          }
-        }
-      }
-      setUsersCache(newCache);
-    }
-
     setOrders(data);
     setLoading(false);
   };
@@ -92,19 +75,27 @@ const Dashboard = ({ user }) => {
     if (user) fetchOrders();
   }, [user]);
 
+  // Calcul dates
   const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+  startOfToday.setHours(0,0,0,0);
 
+  // Filtrer commandes du jour
   const todayOrders = orders.filter(o => {
     if (!o.createdAt?.toDate) return false;
     const orderDate = o.createdAt.toDate();
     return orderDate >= startOfToday;
   });
 
+  // Total aujourd’hui (utilisateur seulement)
   const totalToday = todayOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
+
+  // Points cumulés (depuis début)
   const totalPoints = orders.reduce((sum, o) => sum + (o.points || 0), 0);
+
+  // Remise cumulée (depuis début)
   const totalRemise = orders.reduce((sum, o) => sum + (o.remise || 0), 0);
 
+  // Affichage commandes selon rôle + vue admin
   const displayedOrders = isAdmin && view === 'today' ? todayOrders : orders;
 
   return (
@@ -164,12 +155,7 @@ const Dashboard = ({ user }) => {
                 <br />
                 <small>{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'Date inconnue'}</small>
               </div>
-              {isAdmin && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                  <small>Client : {usersCache[o.userId] || o.userEmail || o.userId}</small>
-                  <small>{o.userId}</small>
-                </div>
-              )}
+              {isAdmin && <small>Client: {o.userId}</small>}
             </li>
           ))}
         </ul>
@@ -184,14 +170,14 @@ const styles = {
     fontFamily: 'Arial, sans-serif',
     maxWidth: 600,
     margin: '0 auto',
-    background: '#fff5f7',
+    background: '#fff5f7', // rose pâle clair pour fond
     minHeight: '100vh',
   },
   title: {
     fontSize: 26,
     textAlign: 'center',
     marginBottom: 20,
-    color: '#7B2233',
+    color: '#7B2233', // bordeaux foncé
     fontWeight: 'bold',
   },
   logout: {
@@ -253,7 +239,7 @@ const styles = {
     marginTop: 15,
   },
   listItem: {
-    background: '#f7d9dc',
+    background: '#f7d9dc', // rose clair
     marginBottom: 12,
     padding: 14,
     borderRadius: 10,

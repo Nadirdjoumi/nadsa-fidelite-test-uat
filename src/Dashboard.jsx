@@ -8,7 +8,9 @@ import {
   query,
   where,
   getDocs,
-  Timestamp
+  Timestamp,
+  getDoc,
+  doc,
 } from 'firebase/firestore';
 
 const Dashboard = ({ user }) => {
@@ -16,36 +18,36 @@ const Dashboard = ({ user }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState('today');
+  const [usersCache, setUsersCache] = useState({});
 
   const isAdmin = user?.email === 'admin@admin.com';
 
-  // Extraire prénom depuis user.displayName ou email
   const prenom = user?.displayName
     ? user.displayName.split(' ')[0]
     : user?.email
-      ? user.email.split('@')[0]
-      : 'Utilisateur';
+    ? user.email.split('@')[0]
+    : 'Utilisateur';
 
-  // Fonction pour calculer points et remise selon montant
   const calcPoints = montant => Math.floor(montant / 100);
-  // remise = points * 1.3 arrondi à la dizaine la plus proche
-  const calcRemise = points => Math.round(points * 1.3 / 10) * 10;
+  const calcRemise = points => Math.round((points * 1.3) / 10) * 10;
 
   const handleAddOrder = async () => {
     if (!amount || isNaN(amount)) return;
     setLoading(true);
 
-    const montantInt = Math.floor(parseFloat(amount)); // arrondi sans décimales
+    const montantInt = Math.floor(parseFloat(amount));
     const points = calcPoints(montantInt);
     const remise = calcRemise(points);
 
     await addDoc(collection(db, 'orders'), {
       userId: user.uid,
+      userEmail: user.email,
       amount: montantInt,
       points,
       remise,
-      createdAt: Timestamp.now()
+      createdAt: Timestamp.now(),
     });
+
     setAmount('');
     fetchOrders();
     setLoading(false);
@@ -63,40 +65,67 @@ const Dashboard = ({ user }) => {
 
     const snapshot = await getDocs(q);
     const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    if (isAdmin) {
+      const newCache = { ...usersCache };
+      for (const order of data) {
+        // if (!newCache[order.userId]) {
+          // try {
+            // const userDoc = await getDoc(doc(db, 'users', order.userId));
+            // newCache[order.userId] = userDoc.exists() ? userDoc.data().email : order.userEmail || 'Inconnu';
+          // } catch (e) {
+            // newCache[order.userId] = 'Erreur';
+          // }
+        // }
+	if (!newCache[order.userId]) {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', order.userId));
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      newCache[order.userId] = `${data.prenom} ${data.nom} (${data.wilaya})`;
+    } else {
+      newCache[order.userId] = order.userEmail || 'Inconnu';
+    }
+  } catch (e) {
+    newCache[order.userId] = 'Erreur';
+  }
+}
+      }
+      setUsersCache(newCache);
+    }
+
     setOrders(data);
     setLoading(false);
   };
 
-  const logout = () => {
-    signOut(auth);
-  };
+  const logout = () => signOut(auth);
 
   useEffect(() => {
     if (user) fetchOrders();
   }, [user]);
 
-  // Calcul dates
   const startOfToday = new Date();
-  startOfToday.setHours(0,0,0,0);
+  startOfToday.setHours(0, 0, 0, 0);
 
-  // Filtrer commandes du jour
   const todayOrders = orders.filter(o => {
     if (!o.createdAt?.toDate) return false;
     const orderDate = o.createdAt.toDate();
     return orderDate >= startOfToday;
   });
 
-  // Total aujourd’hui (utilisateur seulement)
   const totalToday = todayOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
-
-  // Points cumulés (depuis début)
   const totalPoints = orders.reduce((sum, o) => sum + (o.points || 0), 0);
-
-  // Remise cumulée (depuis début)
   const totalRemise = orders.reduce((sum, o) => sum + (o.remise || 0), 0);
 
-  // Affichage commandes selon rôle + vue admin
   const displayedOrders = isAdmin && view === 'today' ? todayOrders : orders;
+
+  const groupedByUser = isAdmin
+    ? displayedOrders.reduce((acc, order) => {
+        if (!acc[order.userId]) acc[order.userId] = [];
+        acc[order.userId].push(order);
+        return acc;
+      }, {})
+    : {};
 
   return (
     <div style={styles.container}>
@@ -145,20 +174,58 @@ const Dashboard = ({ user }) => {
       )}
 
       <div style={styles.box}>
-        <h3 style={styles.subtitle}>{isAdmin ? (view === 'today' ? 'Commandes du jour' : 'Toutes les commandes') : 'Historique'}</h3>
-        {displayedOrders.length === 0 && <p>Aucune commande.</p>}
-        <ul style={styles.list}>
-          {displayedOrders.map(o => (
-            <li key={o.id} style={styles.listItem}>
-              <div>
-                <strong>{o.amount} DA</strong>
-                <br />
-                <small>{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'Date inconnue'}</small>
-              </div>
-              {isAdmin && <small>Client: {o.userId}</small>}
-            </li>
+        <h3 style={styles.subtitle}>
+          {isAdmin ? (view === 'today' ? 'Commandes du jour par client' : 'Toutes les commandes par client') : 'Historique'}
+        </h3>
+
+        {!isAdmin && displayedOrders.length === 0 && <p>Aucune commande.</p>}
+
+        {isAdmin && Object.keys(groupedByUser).length === 0 && <p>Aucune commande.</p>}
+
+        {!isAdmin && (
+          <ul style={styles.list}>
+            {displayedOrders.map(o => (
+              <li key={o.id} style={styles.listItem}>
+                <div>
+                  <strong>{o.amount} DA</strong>
+                  <br />
+                  <small>{o.createdAt?.toDate?.().toLocaleString() || 'Date inconnue'}</small>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {isAdmin &&
+          Object.entries(groupedByUser).map(([userId, userOrders]) => (
+            <div key={userId} style={{ marginBottom: 30 }}>
+              <h4 style={{ color: '#7B2233', marginBottom: 8 }}>
+                Client : {usersCache[userId] || userId}
+              </h4>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
+                <thead>
+                  <tr style={{ background: '#f7d9dc', color: '#7B2233' }}>
+                    <th style={styles.th}>Montant</th>
+                    <th style={styles.th}>Date</th>
+                    <th style={styles.th}>Points</th>
+                    <th style={styles.th}>Remise</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userOrders.map(order => (
+                    <tr key={order.id}>
+                      <td style={styles.td}>{order.amount} DA</td>
+                      <td style={styles.td}>
+                        {order.createdAt?.toDate?.().toLocaleString() || 'Date inconnue'}
+                      </td>
+                      <td style={styles.td}>{order.points}</td>
+                      <td style={styles.td}>{order.remise} DA</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ))}
-        </ul>
       </div>
     </div>
   );
@@ -168,16 +235,16 @@ const styles = {
   container: {
     padding: 20,
     fontFamily: 'Arial, sans-serif',
-    maxWidth: 600,
+    maxWidth: 800,
     margin: '0 auto',
-    background: '#fff5f7', // rose pâle clair pour fond
+    background: '#fff5f7',
     minHeight: '100vh',
   },
   title: {
     fontSize: 26,
     textAlign: 'center',
     marginBottom: 20,
-    color: '#7B2233', // bordeaux foncé
+    color: '#7B2233',
     fontWeight: 'bold',
   },
   logout: {
@@ -191,7 +258,6 @@ const styles = {
     cursor: 'pointer',
     fontWeight: 'bold',
     fontSize: 16,
-    transition: 'background-color 0.3s ease',
   },
   box: {
     background: 'white',
@@ -213,7 +279,6 @@ const styles = {
     marginBottom: 10,
     borderRadius: 6,
     border: '1px solid #ccc',
-    boxSizing: 'border-box'
   },
   button: {
     width: '100%',
@@ -225,7 +290,6 @@ const styles = {
     borderRadius: 30,
     cursor: 'pointer',
     fontWeight: 'bold',
-    transition: 'background-color 0.3s ease',
   },
   stats: {
     marginTop: 20,
@@ -239,7 +303,7 @@ const styles = {
     marginTop: 15,
   },
   listItem: {
-    background: '#f7d9dc', // rose clair
+    background: '#f7d9dc',
     marginBottom: 12,
     padding: 14,
     borderRadius: 10,
@@ -249,6 +313,15 @@ const styles = {
     color: '#7B2233',
     fontWeight: '600',
     boxShadow: '0 2px 6px rgba(123, 34, 51, 0.15)',
+  },
+  th: {
+    padding: '10px',
+    borderBottom: '1px solid #ddd',
+    textAlign: 'left',
+  },
+  td: {
+    padding: '10px',
+    borderBottom: '1px solid #eee',
   },
 };
 

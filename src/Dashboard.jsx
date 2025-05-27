@@ -108,7 +108,12 @@ const Dashboard = ({ user }) => {
   const totalPoints = orders.reduce((sum, o) => sum + (o.points || 0), 0);
   const totalRemise = orders.reduce((sum, o) => sum + (o.remise || 0), 0);
 
-  const displayedOrders = isAdmin && view === 'today' ? todayOrders : orders;
+  const displayedOrders = isAdmin
+  ? view === 'today'
+    ? todayOrders
+    : orders
+  : orders;
+
 
   return (
     <div style={styles.container}>

@@ -199,9 +199,14 @@ const Dashboard = ({ user }) => {
         {isAdmin &&
           Object.entries(groupedByUser).map(([userId, userOrders]) => (
             <div key={userId} style={{ marginBottom: 30 }}>
-              <h4 style={{ color: '#7B2233', marginBottom: 8 }}>
-                Client : {usersCache[userId] || userId}
-              </h4>
+              // <h4 style={{ color: '#7B2233', marginBottom: 8 }}>
+                // Client : {usersCache[userId] || userId}
+              // </h4>
+	<h4 style={{ color: '#7B2233', marginBottom: 8 }}>
+  Client : {usersCache[userId] || userId} — 
+  {userOrders.reduce((sum, o) => sum + (o.remise || 0), 0)} DA
+</h4>
+
               <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
                 <thead>
                   <tr style={{ background: '#f7d9dc', color: '#7B2233' }}>

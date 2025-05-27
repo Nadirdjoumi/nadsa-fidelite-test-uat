@@ -54,7 +54,7 @@ const Login = ({ onLogin }) => {
           createdAt: new Date(),
         });
 
-        alert('Inscription réussie, vous pouvez maintenant vous connecter.');
+        // alert('Inscription réussie, vous pouvez maintenant vous connecter.');
 
         // Reset form et passer en mode connexion
         setFormData({

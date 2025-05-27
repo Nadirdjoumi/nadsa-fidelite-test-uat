@@ -19,6 +19,13 @@ const Dashboard = ({ user }) => {
 
   const isAdmin = user?.email === 'admin@admin.com';
 
+  // Extraire prénom depuis user.displayName ou email
+  const prenom = user?.displayName
+    ? user.displayName.split(' ')[0]
+    : user?.email
+      ? user.email.split('@')[0]
+      : 'Utilisateur';
+
   const handleAddOrder = async () => {
     if (!amount) return;
     setLoading(true);
@@ -68,7 +75,7 @@ const Dashboard = ({ user }) => {
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.title}>Bienvenue {isAdmin ? 'Admin' : user.email}</h2>
+      <h2 style={styles.title}>Bienvenue {prenom}</h2>
       <button onClick={logout} style={styles.logout}>Se déconnecter</button>
 
       {!isAdmin && (
@@ -96,8 +103,18 @@ const Dashboard = ({ user }) => {
       {isAdmin && (
         <div style={styles.box}>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
-            <button onClick={() => setView('today')} style={{ ...styles.button, background: view === 'today' ? '#2196f3' : '#ccc' }}>Commandes du jour</button>
-            <button onClick={() => setView('all')} style={{ ...styles.button, background: view === 'all' ? '#2196f3' : '#ccc' }}>Toutes les commandes</button>
+            <button
+              onClick={() => setView('today')}
+              style={{ ...styles.button, backgroundColor: view === 'today' ? '#7B2233' : '#ccc' }}
+            >
+              Commandes du jour
+            </button>
+            <button
+              onClick={() => setView('all')}
+              style={{ ...styles.button, backgroundColor: view === 'all' ? '#7B2233' : '#ccc' }}
+            >
+              Toutes les commandes
+            </button>
           </div>
         </div>
       )}
@@ -125,73 +142,89 @@ const Dashboard = ({ user }) => {
 const styles = {
   container: {
     padding: 20,
-    fontFamily: 'sans-serif',
-    maxWidth: 500,
+    fontFamily: 'Arial, sans-serif',
+    maxWidth: 600,
     margin: '0 auto',
-    background: '#f9f9f9',
-    minHeight: '100vh'
+    background: '#fff5f7', // rose pâle clair pour fond
+    minHeight: '100vh',
   },
   title: {
-    fontSize: 22,
+    fontSize: 26,
     textAlign: 'center',
-    marginBottom: 10
+    marginBottom: 20,
+    color: '#7B2233', // bordeaux foncé
+    fontWeight: 'bold',
   },
   logout: {
     display: 'block',
     margin: '10px auto 30px auto',
-    background: '#bbb',
+    background: '#7B2233',
     border: 'none',
-    padding: 10,
-    borderRadius: 6,
-    cursor: 'pointer'
+    padding: '12px 30px',
+    borderRadius: 30,
+    color: 'white',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    fontSize: 16,
+    transition: 'background-color 0.3s ease',
   },
   box: {
     background: 'white',
-    padding: 15,
-    borderRadius: 10,
+    padding: 20,
+    borderRadius: 15,
     marginBottom: 30,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
   },
   subtitle: {
-    fontSize: 18,
-    marginBottom: 10
+    fontSize: 20,
+    marginBottom: 15,
+    color: '#7B2233',
+    fontWeight: '600',
   },
   input: {
     width: '100%',
-    padding: 10,
+    padding: 12,
     fontSize: 16,
-    marginBottom: 10,
-    borderRadius: 6,
-    border: '1px solid #ccc'
+    marginBottom: 15,
+    borderRadius: 10,
+    border: '1.5px solid #7B2233',
+    outlineColor: '#7B2233',
   },
   button: {
     width: '100%',
-    padding: 12,
+    padding: 14,
     fontSize: 16,
-    background: '#4caf50',
+    backgroundColor: '#7B2233',
     color: 'white',
     border: 'none',
-    borderRadius: 6,
-    cursor: 'pointer'
+    borderRadius: 30,
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    transition: 'background-color 0.3s ease',
   },
   stats: {
-    marginTop: 15,
-    lineHeight: 1.6
+    marginTop: 20,
+    lineHeight: 1.6,
+    fontSize: 16,
+    color: '#333',
   },
   list: {
     listStyle: 'none',
     padding: 0,
-    marginTop: 10
+    marginTop: 15,
   },
   listItem: {
-    background: '#eee',
-    marginBottom: 10,
-    padding: 10,
-    borderRadius: 6,
+    background: '#f7d9dc', // rose clair
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 10,
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center'
-  }
+    alignItems: 'center',
+    color: '#7B2233',
+    fontWeight: '600',
+    boxShadow: '0 2px 6px rgba(123, 34, 51, 0.15)',
+  },
 };
 
 export default Dashboard;

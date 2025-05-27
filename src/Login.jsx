@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-//import { auth } from './firebase';
-import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
+} from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
 const Login = () => {
-  const [mode, setMode] = useState('login'); // 'login' or 'signup'
+  const [mode, setMode] = useState('login');
   const [form, setForm] = useState({
     nom: '',
     prenom: '',
@@ -35,9 +38,21 @@ const Login = () => {
       }
       try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(userCredential.user, {
-          displayName: prenom + ' ' + nom
+        const user = userCredential.user;
+
+        // Définir displayName
+        await updateProfile(user, {
+          displayName: `${prenom} ${nom}`,
         });
+
+        // Enregistrer dans Firestore
+        await setDoc(doc(db, 'users', user.uid), {
+          nom,
+          prenom,
+          wilaya,
+          email,
+        });
+
       } catch (err) {
         setError(err.message);
       }
@@ -53,21 +68,6 @@ const Login = () => {
         setError(err.message);
       }
     }
-	
-	
-	// Optionnel : mettre à jour displayName
-  await updateProfile(user, {
-    displayName: `${firstName} ${lastName}`,
-  });
-
-  // Enregistrer prénom + nom dans Firestore
-  await setDoc(doc(db, 'users', user.uid), {
-    firstName,
-    lastName,
-    email,
-  });
-  
-  
 
     setLoading(false);
   };
@@ -129,7 +129,13 @@ const Login = () => {
         </form>
         <p style={styles.toggleText}>
           {mode === 'signup' ? 'Vous avez déjà un compte ?' : "Pas encore de compte ?"}{' '}
-          <button onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setError(''); }} style={styles.toggleButton}>
+          <button
+            onClick={() => {
+              setMode(mode === 'signup' ? 'login' : 'signup');
+              setError('');
+            }}
+            style={styles.toggleButton}
+          >
             {mode === 'signup' ? 'Se connecter' : "S’inscrire"}
           </button>
         </p>
@@ -138,74 +144,6 @@ const Login = () => {
   );
 };
 
-const styles = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    fontFamily: 'Arial, sans-serif',
-    minHeight: '100vh',
-    backgroundColor: '#fff5f7',
-    boxSizing: 'border-box',
-  },
-  box: {
-    backgroundColor: 'white',
-    padding: 30,
-    borderRadius: 15,
-    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
-    width: '100%',
-    maxWidth: 400,
-    boxSizing: 'border-box',
-  },
-  title: {
-    fontSize: 28,
-    textAlign: 'center',
-    marginBottom: 25,
-    color: '#7B2233',
-    fontWeight: 'bold',
-  },
-  input: {
-    width: '100%',
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 15,
-    borderRadius: 6,
-    border: '1px solid #ccc',
-    boxSizing: 'border-box',
-  },
-  button: {
-    width: '100%',
-    padding: 14,
-    fontSize: 16,
-    backgroundColor: '#7B2233',
-    color: 'white',
-    border: 'none',
-    borderRadius: 30,
-    cursor: 'pointer',
-    fontWeight: 'bold',
-    transition: 'background-color 0.3s ease',
-  },
-  error: {
-    color: '#b22222',
-    marginBottom: 15,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  toggleText: {
-    marginTop: 15,
-    textAlign: 'center',
-    fontSize: 14,
-    color: '#555',
-  },
-  toggleButton: {
-    background: 'none',
-    border: 'none',
-    color: '#7B2233',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-  },
-};
+// (Styles identiques)
 
 export default Login;

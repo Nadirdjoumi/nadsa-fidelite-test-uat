@@ -1,16 +1,10 @@
-// src/Login.jsx
 import React, { useState } from 'react';
-import { auth, db } from './firebase';
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  updateProfile,
-} from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { auth } from './firebase';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 
-const Login = ({ onLogin }) => {
-  const [isRegister, setIsRegister] = useState(false);
-  const [formData, setFormData] = useState({
+const Login = () => {
+  const [mode, setMode] = useState('login'); // 'login' or 'signup'
+  const [form, setForm] = useState({
     nom: '',
     prenom: '',
     wilaya: '',
@@ -21,7 +15,7 @@ const Login = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
 
   const handleChange = e => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setForm({ ...form, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async e => {
@@ -29,78 +23,32 @@ const Login = ({ onLogin }) => {
     setError('');
     setLoading(true);
 
-    try {
-      if (isRegister) {
-        const { nom, prenom, wilaya, email, password } = formData;
-        if (!nom || !prenom || !wilaya || !email || !password) {
-          setError('Merci de remplir tous les champs.');
-          setLoading(false);
-          return;
-        }
+    const { nom, prenom, wilaya, email, password } = form;
 
-        // Créer le compte utilisateur
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-
-        // Mettre à jour le profil utilisateur (displayName avec prénom + nom)
-        await updateProfile(user, { displayName: `${prenom} ${nom}` });
-
-        // Enregistrer les infos complémentaires dans Firestore
-        await setDoc(doc(db, 'users', user.uid), {
-          nom,
-          prenom,
-          wilaya,
-          email,
-          createdAt: new Date(),
-        });
-
-        // alert('Inscription réussie, vous pouvez maintenant vous connecter.');
-
-        // Reset form et passer en mode connexion
-        setFormData({
-          nom: '',
-          prenom: '',
-          wilaya: '',
-          email: '',
-          password: '',
-        });
-        setIsRegister(false);
-
-      } else {
-        const { email, password } = formData;
-        if (!email || !password) {
-          setError('Merci de remplir email et mot de passe.');
-          setLoading(false);
-          return;
-        }
-
-        // Connexion utilisateur
-        await signInWithEmailAndPassword(auth, email, password);
-
-        // Appel callback parent pour indiquer la connexion réussie
-        if (onLogin) onLogin();
-
-        // Tu peux ici rediriger ou afficher autre chose
+    if (mode === 'signup') {
+      if (!nom || !prenom || !wilaya || !email || !password) {
+        setError('Veuillez remplir tous les champs.');
+        setLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error(err);
-      // Gestion d’erreur basique
-      switch (err.code) {
-        case 'auth/email-already-in-use':
-          setError("Cet email est déjà utilisé.");
-          break;
-        case 'auth/invalid-email':
-          setError("Email invalide.");
-          break;
-        case 'auth/weak-password':
-          setError("Mot de passe trop faible (au moins 6 caractères).");
-          break;
-        case 'auth/user-not-found':
-        case 'auth/wrong-password':
-          setError("Email ou mot de passe incorrect.");
-          break;
-        default:
-          setError(err.message);
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(userCredential.user, {
+          displayName: prenom + ' ' + nom
+        });
+      } catch (err) {
+        setError(err.message);
+      }
+    } else {
+      if (!email || !password) {
+        setError('Veuillez saisir email et mot de passe.');
+        setLoading(false);
+        return;
+      }
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (err) {
+        setError(err.message);
       }
     }
 
@@ -109,157 +57,137 @@ const Login = ({ onLogin }) => {
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Mon Compte NADSA</h1>
-      <form onSubmit={handleSubmit} style={styles.form}>
-        {isRegister && (
-          <>
-            <input
-              style={styles.input}
-              type="text"
-              name="nom"
-              placeholder="Nom"
-              value={formData.nom}
-              onChange={handleChange}
-              disabled={loading}
-            />
-            <input
-              style={styles.input}
-              type="text"
-              name="prenom"
-              placeholder="Prénom"
-              value={formData.prenom}
-              onChange={handleChange}
-              disabled={loading}
-            />
-            <input
-              style={styles.input}
-              type="text"
-              name="wilaya"
-              placeholder="Wilaya"
-              value={formData.wilaya}
-              onChange={handleChange}
-              disabled={loading}
-            />
-          </>
-        )}
-        <input
-          style={styles.input}
-          type="email"
-          name="email"
-          placeholder="Adresse email"
-          value={formData.email}
-          onChange={handleChange}
-          disabled={loading}
-        />
-        <input
-          style={styles.input}
-          type="password"
-          name="password"
-          placeholder="Mot de passe"
-          value={formData.password}
-          onChange={handleChange}
-          disabled={loading}
-        />
-        {error && <p style={styles.error}>{error}</p>}
-
-        <button type="submit" style={styles.button} disabled={loading}>
-          {loading ? 'Chargement...' : (isRegister ? "S'inscrire" : 'Se connecter')}
-        </button>
-      </form>
-
-      <p style={styles.switchText}>
-        {isRegister ? 'Vous avez déjà un compte ?' : "Pas encore de compte ?"}{' '}
-        <button
-          style={styles.switchButton}
-          onClick={() => {
-            setIsRegister(!isRegister);
-            setError('');
-            setFormData({
-              nom: '',
-              prenom: '',
-              wilaya: '',
-              email: '',
-              password: '',
-            });
-          }}
-          type="button"
-          disabled={loading}
-        >
-          {isRegister ? 'Se connecter' : "S'inscrire"}
-        </button>
-      </p>
+      <div style={styles.box}>
+        <h2 style={styles.title}>Mon Compte NADSA</h2>
+        <form onSubmit={handleSubmit}>
+          {mode === 'signup' && (
+            <>
+              <input
+                style={styles.input}
+                name="prenom"
+                placeholder="Prénom"
+                value={form.prenom}
+                onChange={handleChange}
+                autoComplete="given-name"
+              />
+              <input
+                style={styles.input}
+                name="nom"
+                placeholder="Nom"
+                value={form.nom}
+                onChange={handleChange}
+                autoComplete="family-name"
+              />
+              <input
+                style={styles.input}
+                name="wilaya"
+                placeholder="Wilaya"
+                value={form.wilaya}
+                onChange={handleChange}
+              />
+            </>
+          )}
+          <input
+            style={styles.input}
+            type="email"
+            name="email"
+            placeholder="Adresse email"
+            value={form.email}
+            onChange={handleChange}
+            autoComplete="email"
+          />
+          <input
+            style={styles.input}
+            type="password"
+            name="password"
+            placeholder="Mot de passe"
+            value={form.password}
+            onChange={handleChange}
+            autoComplete={mode === 'signup' ? "new-password" : "current-password"}
+          />
+          {error && <p style={styles.error}>{error}</p>}
+          <button type="submit" style={styles.button} disabled={loading}>
+            {loading ? 'Chargement...' : mode === 'signup' ? 'S’inscrire' : 'Se connecter'}
+          </button>
+        </form>
+        <p style={styles.toggleText}>
+          {mode === 'signup' ? 'Vous avez déjà un compte ?' : "Pas encore de compte ?"}{' '}
+          <button onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setError(''); }} style={styles.toggleButton}>
+            {mode === 'signup' ? 'Se connecter' : "S’inscrire"}
+          </button>
+        </p>
+      </div>
     </div>
   );
 };
 
 const styles = {
   container: {
-    maxWidth: 400,
-    margin: '50px auto',
-    padding: 30,
-    borderRadius: 12,
-    backgroundColor: '#5B2333',
-    color: '#fff',
-    boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-  },
-  title: {
-    textAlign: 'center',
-    marginBottom: 30,
-    fontWeight: '700',
-    fontSize: 28,
-    letterSpacing: 2,
-  },
-  form: {
     display: 'flex',
     flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    fontFamily: 'Arial, sans-serif',
+    minHeight: '100vh',
+    backgroundColor: '#fff5f7',
+    boxSizing: 'border-box',
+  },
+  box: {
+    backgroundColor: 'white',
+    padding: 30,
+    borderRadius: 15,
+    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
+    width: '100%',
+    maxWidth: 400,
+    boxSizing: 'border-box',
+  },
+  title: {
+    fontSize: 28,
+    textAlign: 'center',
+    marginBottom: 25,
+    color: '#7B2233',
+    fontWeight: 'bold',
   },
   input: {
-    marginBottom: 15,
+    width: '100%',
     padding: 12,
     fontSize: 16,
+    marginBottom: 15,
     borderRadius: 6,
-    border: 'none',
-    outline: 'none',
-    fontWeight: '600',
-    backgroundColor: '#7A3B4B',
-    color: '#fff',
+    border: '1px solid #ccc',
+    boxSizing: 'border-box',
   },
   button: {
+    width: '100%',
     padding: 14,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#5B2333',
-    backgroundColor: '#F1C40F',
+    fontSize: 16,
+    backgroundColor: '#7B2233',
+    color: 'white',
     border: 'none',
-    borderRadius: 8,
+    borderRadius: 30,
     cursor: 'pointer',
-    transition: 'background-color 0.3s',
+    fontWeight: 'bold',
+    transition: 'background-color 0.3s ease',
   },
   error: {
+    color: '#b22222',
     marginBottom: 15,
-    color: '#ffdddd',
-    backgroundColor: '#8B0000',
-    padding: 10,
-    borderRadius: 6,
-    fontWeight: '600',
+    fontWeight: 'bold',
     textAlign: 'center',
   },
-  switchText: {
+  toggleText: {
+    marginTop: 15,
     textAlign: 'center',
-    marginTop: 20,
     fontSize: 14,
-    color: '#ddd',
+    color: '#555',
   },
-  switchButton: {
+  toggleButton: {
     background: 'none',
     border: 'none',
-    color: '#F1C40F',
+    color: '#7B2233',
+    fontWeight: 'bold',
     cursor: 'pointer',
-    fontWeight: '700',
-    textDecoration: 'underline',
-    padding: 0,
-    marginLeft: 6,
   },
 };
 

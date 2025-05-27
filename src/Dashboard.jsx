@@ -1,4 +1,3 @@
-// src/Dashboard.jsx
 import React, { useEffect, useState } from 'react';
 import { auth, db } from './firebase';
 import { signOut } from 'firebase/auth';
@@ -19,7 +18,6 @@ const Dashboard = ({ user }) => {
 
   const isAdmin = user?.email === 'admin@admin.com';
 
-  // Extraire prénom depuis user.displayName ou email
   const prenom = user?.displayName
     ? user.displayName.split(' ')[0]
     : user?.email
@@ -29,9 +27,19 @@ const Dashboard = ({ user }) => {
   const handleAddOrder = async () => {
     if (!amount) return;
     setLoading(true);
+
+    // Convertir en entier arrondi (sans centimes), en DA
+    const montantDA = Math.round(Number(amount));
+
+    // Calculs
+    const points = Math.floor(montantDA / 100);
+    const remise = Math.round(points * 1.3 / 10) * 10; // arrondi à la dizaine
+
     await addDoc(collection(db, 'orders'), {
       userId: user.uid,
-      amount: Math.floor(parseFloat(amount)), // montant entier, sans virgule
+      amount: montantDA,
+      points,
+      remise,
       createdAt: Timestamp.now()
     });
     setAmount('');
@@ -68,9 +76,9 @@ const Dashboard = ({ user }) => {
   const totalToday = todayOrders.reduce((sum, o) => sum + o.amount, 0);
   const totalAll = orders.reduce((sum, o) => sum + o.amount, 0);
 
-  // Calculs selon la nouvelle règle
-  const points = Math.floor(totalAll / 100);
-  const discount = Math.round(points * 1.3 / 10) * 10; // arrondi à la dizaine
+  // Points et remise cumulés sur toutes les commandes
+  const totalPoints = orders.reduce((sum, o) => sum + (o.points || 0), 0);
+  const totalRemise = orders.reduce((sum, o) => sum + (o.remise || 0), 0);
 
   const displayedOrders = isAdmin && view === 'today' ? todayOrders : orders;
 
@@ -84,19 +92,20 @@ const Dashboard = ({ user }) => {
           <h3 style={styles.subtitle}>Ajouter une commande</h3>
           <input
             type="number"
-            placeholder="Montant DA"
+            placeholder="Montant en DA"
             value={amount}
             onChange={e => setAmount(e.target.value)}
-            style={{ ...styles.input, width: 150 }} // largeur fixe = bouton
+            style={styles.input}
+            min={0}
           />
-          <button onClick={handleAddOrder} style={{ ...styles.button, width: 150 }} disabled={loading}>
+          <button onClick={handleAddOrder} style={styles.button} disabled={loading}>
             {loading ? 'Envoi...' : 'Ajouter'}
           </button>
 
           <div style={styles.stats}>
             <p><strong>Total aujourd'hui :</strong> {totalToday} DA</p>
-            <p><strong>Points cumulés :</strong> {points} pts</p>
-            <p><strong>Remise obtenue :</strong> {discount} DA</p>
+            <p><strong>Points cumulés :</strong> {totalPoints} pts</p>
+            <p><strong>Remise obtenue :</strong> {totalRemise} DA</p>
           </div>
         </div>
       )}
@@ -106,13 +115,13 @@ const Dashboard = ({ user }) => {
           <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
             <button
               onClick={() => setView('today')}
-              style={{ ...styles.button, backgroundColor: view === 'today' ? '#7B2233' : '#ccc' }}
+              style={{ ...styles.button, backgroundColor: view === 'today' ? '#7B2233' : '#ccc', width: 'auto', padding: '10px 20px' }}
             >
               Commandes du jour
             </button>
             <button
               onClick={() => setView('all')}
-              style={{ ...styles.button, backgroundColor: view === 'all' ? '#7B2233' : '#ccc' }}
+              style={{ ...styles.button, backgroundColor: view === 'all' ? '#7B2233' : '#ccc', width: 'auto', padding: '10px 20px' }}
             >
               Toutes les commandes
             </button>
@@ -142,54 +151,51 @@ const Dashboard = ({ user }) => {
 
 const styles = {
   container: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
     padding: 20,
     fontFamily: 'Arial, sans-serif',
     maxWidth: 600,
     margin: '0 auto',
-    background: '#fff5f7', // rose pâle clair pour fond
+    backgroundColor: '#fff5f7',
     minHeight: '100vh',
+    boxSizing: 'border-box',
+  },
+  box: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 30,
+    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
+    width: '100%',
+    maxWidth: 400,
+    boxSizing: 'border-box',
   },
   title: {
     fontSize: 26,
     textAlign: 'center',
     marginBottom: 20,
-    color: '#7B2233', // bordeaux foncé
+    color: '#7B2233',
     fontWeight: 'bold',
-  },
-  logout: {
-    display: 'block',
-    margin: '10px auto 30px auto',
-    background: '#7B2233',
-    border: 'none',
-    padding: '12px 30px',
-    borderRadius: 30,
-    color: 'white',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-    fontSize: 16,
-    transition: 'background-color 0.3s ease',
-  },
-  box: {
-    background: 'white',
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 30,
-    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
+    width: '100%',
   },
   subtitle: {
     fontSize: 20,
     marginBottom: 15,
     color: '#7B2233',
-    fontWeight: '600',
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
   input: {
     width: '100%',
-    padding: 10,
+    padding: 12,
     fontSize: 16,
-    marginBottom: 10,
+    marginBottom: 15,
     borderRadius: 6,
     border: '1px solid #ccc',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
   },
   button: {
     width: '100%',
@@ -203,28 +209,34 @@ const styles = {
     fontWeight: 'bold',
     transition: 'background-color 0.3s ease',
   },
+  logout: {
+    backgroundColor: '#b22222',
+    color: 'white',
+    border: 'none',
+    padding: '10px 20px',
+    borderRadius: 30,
+    cursor: 'pointer',
+    alignSelf: 'flex-end',
+    marginBottom: 20,
+    fontWeight: 'bold',
+  },
   stats: {
-    marginTop: 20,
-    lineHeight: 1.6,
+    marginTop: 15,
     fontSize: 16,
     color: '#333',
   },
   list: {
-    listStyle: 'none',
-    padding: 0,
-    marginTop: 15,
+    listStyleType: 'none',
+    paddingLeft: 0,
+    maxHeight: 300,
+    overflowY: 'auto',
   },
   listItem: {
-    background: '#f7d9dc', // rose clair
-    marginBottom: 12,
-    padding: 14,
-    borderRadius: 10,
+    padding: 10,
+    borderBottom: '1px solid #ddd',
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    color: '#7B2233',
-    fontWeight: '600',
-    boxShadow: '0 2px 6px rgba(123, 34, 51, 0.15)',
+    flexWrap: 'wrap',
   },
 };
 

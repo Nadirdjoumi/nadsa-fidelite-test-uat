@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { auth, db } from './firebase'; // Assure-toi que db est importé ici
+import { auth } from './firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';  // Import Firestore
 
 const Login = () => {
   const [mode, setMode] = useState('login'); // 'login' or 'signup'
@@ -34,26 +33,11 @@ const Login = () => {
       }
       try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-
-        // Mettre à jour le displayName dans Firebase Auth
         await updateProfile(userCredential.user, {
           displayName: prenom + ' ' + nom
         });
-
-        // Créer un document dans la collection "users" avec uid comme ID
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
-          uid: userCredential.user.uid,
-          email: email,
-          nom: nom,
-          prenom: prenom,
-          wilaya: wilaya,
-          createdAt: new Date()
-        });
-
       } catch (err) {
         setError(err.message);
-        setLoading(false);
-        return;
       }
     } else {
       if (!email || !password) {
@@ -65,8 +49,6 @@ const Login = () => {
         await signInWithEmailAndPassword(auth, email, password);
       } catch (err) {
         setError(err.message);
-        setLoading(false);
-        return;
       }
     }
 
@@ -139,6 +121,74 @@ const Login = () => {
   );
 };
 
-// (styles inchangés...)
+const styles = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    fontFamily: 'Arial, sans-serif',
+    minHeight: '100vh',
+    backgroundColor: '#fff5f7',
+    boxSizing: 'border-box',
+  },
+  box: {
+    backgroundColor: 'white',
+    padding: 30,
+    borderRadius: 15,
+    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
+    width: '100%',
+    maxWidth: 400,
+    boxSizing: 'border-box',
+  },
+  title: {
+    fontSize: 28,
+    textAlign: 'center',
+    marginBottom: 25,
+    color: '#7B2233',
+    fontWeight: 'bold',
+  },
+  input: {
+    width: '100%',
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 15,
+    borderRadius: 6,
+    border: '1px solid #ccc',
+    boxSizing: 'border-box',
+  },
+  button: {
+    width: '100%',
+    padding: 14,
+    fontSize: 16,
+    backgroundColor: '#7B2233',
+    color: 'white',
+    border: 'none',
+    borderRadius: 30,
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    transition: 'background-color 0.3s ease',
+  },
+  error: {
+    color: '#b22222',
+    marginBottom: 15,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  toggleText: {
+    marginTop: 15,
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#555',
+  },
+  toggleButton: {
+    background: 'none',
+    border: 'none',
+    color: '#7B2233',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+  },
+};
 
 export default Login;

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { auth } from './firebase';
+//import { auth } from './firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 
 const Login = () => {
@@ -51,6 +53,21 @@ const Login = () => {
         setError(err.message);
       }
     }
+	
+	
+	// Optionnel : mettre à jour displayName
+  await updateProfile(user, {
+    displayName: `${firstName} ${lastName}`,
+  });
+
+  // Enregistrer prénom + nom dans Firestore
+  await setDoc(doc(db, 'users', user.uid), {
+    firstName,
+    lastName,
+    email,
+  });
+  
+  
 
     setLoading(false);
   };

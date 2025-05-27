@@ -72,7 +72,14 @@ const Dashboard = ({ user }) => {
         if (!newCache[order.userId]) {
           try {
             const userDoc = await getDoc(doc(db, 'users', order.userId));
-            newCache[order.userId] = userDoc.exists() ? userDoc.data().email : order.userEmail || 'Inconnu';
+            //newCache[order.userId] = userDoc.exists() ? userDoc.data().email : order.userEmail || 'Inconnu';
+			if (userDoc.exists()) {
+				const userData = userDoc.data();
+					newCache[order.userId] = userData.displayName || userData.email || 'Inconnu';
+			} else {
+				newCache[order.userId] = order.userEmail || 'Inconnu';
+			}
+
           } catch (e) {
             newCache[order.userId] = 'Erreur';
           }

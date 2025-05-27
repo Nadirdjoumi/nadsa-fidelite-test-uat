@@ -200,10 +200,10 @@ const Dashboard = ({ user }) => {
           Object.entries(groupedByUser).map(([userId, userOrders]) => (
             <div key={userId} style={{ marginBottom: 30 }}>
 
-	<h4 style={{ color: '#7B2233', marginBottom: 8 }}>
-  Client : {usersCache[userId] || userId} — 
-  {userOrders.reduce((sum, o) => sum + (o.remise || 0), 0)} DA
-</h4>
+	<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#7B2233', marginBottom: 8 }}>
+  <span><strong>Client :</strong> {usersCache[userId] || userId}</span>
+  <span><strong>{userOrders.reduce((sum, o) => sum + (o.remise || 0), 0)} DA</strong></span>
+</div>
 
               <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
                 <thead>

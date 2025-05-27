@@ -182,14 +182,15 @@ const styles = {
     fontWeight: '600',
   },
   input: {
-    width: '100%',
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 15,
-    borderRadius: 10,
-    border: '1.5px solid #7B2233',
-    outlineColor: '#7B2233',
-  },
+  width: '80%',        // Réduit la largeur pour qu'elle ne déborde pas
+  maxWidth: '300px',   // Optionnel, limite la largeur maximale
+  padding: '8px',      // Un peu moins de padding vertical et horizontal
+  fontSize: 16,
+  marginBottom: 10,
+  borderRadius: 6,
+  border: '1px solid #ccc',
+  boxSizing: 'border-box', // pour inclure padding et bordure dans la largeur totale
+}
   button: {
     width: '100%',
     padding: 14,

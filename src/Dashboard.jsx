@@ -194,7 +194,7 @@ if (!newCache[order.userId]) {
                 <div>
                   <strong>{o.amount} DA</strong>
                   <br />
-                  <small>{o.createdAt?.toDate?.().toLocaleString() || 'Date inconnue'}</small>
+                  <small>{o.createdAt?.toDate().toLocaleString() || 'Date inconnue'}</small>
                 </div>
               </li>
             ))}
@@ -221,7 +221,7 @@ if (!newCache[order.userId]) {
                     <tr key={order.id}>
                       <td style={styles.td}>{order.amount} DA</td>
                       <td style={styles.td}>
-                        {order.createdAt?.toDate?.().toLocaleString() || 'Date inconnue'}
+                        {order.createdAt?.toDate().toLocaleString() || 'Date inconnue'}
                       </td>
                       <td style={styles.td}>{order.points}</td>
                       <td style={styles.td}>{order.remise} DA</td>

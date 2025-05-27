@@ -20,7 +20,7 @@ const Dashboard = ({ user }) => {
   const [view, setView] = useState('today');
   const [usersCache, setUsersCache] = useState({});
 
-  const isAdmin = user?.email === 'nadsa@admin.com';
+  const isAdmin = user?.email === 'admin@admin.com';
 
   const prenom = user?.displayName
     ? user.displayName.split(' ')[0]

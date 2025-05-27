@@ -31,7 +31,7 @@ const Dashboard = ({ user }) => {
     setLoading(true);
     await addDoc(collection(db, 'orders'), {
       userId: user.uid,
-      amount: parseFloat(amount),
+      amount: Math.floor(parseFloat(amount)), // montant entier, sans virgule
       createdAt: Timestamp.now()
     });
     setAmount('');
@@ -68,8 +68,9 @@ const Dashboard = ({ user }) => {
   const totalToday = todayOrders.reduce((sum, o) => sum + o.amount, 0);
   const totalAll = orders.reduce((sum, o) => sum + o.amount, 0);
 
-  const points = totalAll;
-  const discount = (points / 100 * 5).toFixed(2);
+  // Calculs selon la nouvelle règle
+  const points = Math.floor(totalAll / 100);
+  const discount = Math.round(points * 1.3 / 10) * 10; // arrondi à la dizaine
 
   const displayedOrders = isAdmin && view === 'today' ? todayOrders : orders;
 
@@ -83,19 +84,19 @@ const Dashboard = ({ user }) => {
           <h3 style={styles.subtitle}>Ajouter une commande</h3>
           <input
             type="number"
-            placeholder="Montant €"
+            placeholder="Montant DA"
             value={amount}
             onChange={e => setAmount(e.target.value)}
-            style={styles.input}
+            style={{ ...styles.input, width: 150 }} // largeur fixe = bouton
           />
-          <button onClick={handleAddOrder} style={styles.button} disabled={loading}>
+          <button onClick={handleAddOrder} style={{ ...styles.button, width: 150 }} disabled={loading}>
             {loading ? 'Envoi...' : 'Ajouter'}
           </button>
 
           <div style={styles.stats}>
-            <p><strong>Total aujourd'hui :</strong> {totalToday.toFixed(2)} €</p>
+            <p><strong>Total aujourd'hui :</strong> {totalToday} DA</p>
             <p><strong>Points cumulés :</strong> {points} pts</p>
-            <p><strong>Remise obtenue :</strong> {discount} €</p>
+            <p><strong>Remise obtenue :</strong> {discount} DA</p>
           </div>
         </div>
       )}
@@ -126,7 +127,7 @@ const Dashboard = ({ user }) => {
           {displayedOrders.map(o => (
             <li key={o.id} style={styles.listItem}>
               <div>
-                <strong>{o.amount} €</strong>
+                <strong>{o.amount} DA</strong>
                 <br />
                 <small>{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'Date inconnue'}</small>
               </div>
@@ -182,14 +183,14 @@ const styles = {
     fontWeight: '600',
   },
   input: {
-  width: '100%',
-  padding: 10,
-  fontSize: 16,
-  marginBottom: 10,
-  borderRadius: 6,
-  border: '1px solid #ccc',
-  boxSizing: 'border-box'  // <-- ajoute ça
-},
+    width: '100%',
+    padding: 10,
+    fontSize: 16,
+    marginBottom: 10,
+    borderRadius: 6,
+    border: '1px solid #ccc',
+    boxSizing: 'border-box'
+  },
   button: {
     width: '100%',
     padding: 14,

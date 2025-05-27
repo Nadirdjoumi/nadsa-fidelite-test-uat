@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { auth } from './firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from './firebase';
+
 
 const Login = () => {
   const [mode, setMode] = useState('login'); // 'login' or 'signup'
@@ -33,9 +36,22 @@ const Login = () => {
       }
       try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(userCredential.user, {
-          displayName: prenom + ' ' + nom
-        });
+		
+await updateProfile(userCredential.user, {
+  displayName: prenom + ' ' + nom
+});
+
+await setDoc(doc(db, 'users', userCredential.user.uid), {
+  prenom,
+  nom,
+  email,
+  wilaya,
+  createdAt: new Date()
+});
+
+		
+		
+		
       } catch (err) {
         setError(err.message);
       }

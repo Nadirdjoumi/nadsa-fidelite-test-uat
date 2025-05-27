@@ -82,14 +82,19 @@ if (!newCache[order.userId]) {
     const userDoc = await getDoc(doc(db, 'users', order.userId));
     if (userDoc.exists()) {
       const data = userDoc.data();
-      newCache[order.userId] = `${data.prenom} ${data.nom} (${data.wilaya})`;
+      const prenom = data.prenom || '';
+      const nom = data.nom || '';
+      const wilaya = data.wilaya || '';
+      newCache[order.userId] = `${prenom} ${nom}${wilaya ? ' (' + wilaya + ')' : ''}`.trim() || order.userEmail || 'Inconnu';
     } else {
       newCache[order.userId] = order.userEmail || 'Inconnu';
     }
   } catch (e) {
+    console.error('Erreur récupération utilisateur :', e);
     newCache[order.userId] = 'Erreur';
   }
 }
+
       }
       setUsersCache(newCache);
     }

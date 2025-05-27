@@ -94,6 +94,9 @@ const Login = () => {
       case 'auth/too-many-requests':
         setError("Trop de tentatives échouées. Veuillez réessayer plus tard.");
         break;
+		case 'auth/invalid-credential':
+        setError("Adresse email ou mot de passe incorrect.");
+        break;
       default:
         setError("Erreur lors de la connexion : " + err.message);
     }

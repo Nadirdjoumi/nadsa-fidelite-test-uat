@@ -69,20 +69,12 @@ const Dashboard = ({ user }) => {
     if (isAdmin) {
       const newCache = { ...usersCache };
       for (const order of data) {
-        // if (!newCache[order.userId]) {
-          // try {
-            // const userDoc = await getDoc(doc(db, 'users', order.userId));
-            // newCache[order.userId] = userDoc.exists() ? userDoc.data().email : order.userEmail || 'Inconnu';
-          // } catch (e) {
-            // newCache[order.userId] = 'Erreur';
-          // }
-        // }
 	if (!newCache[order.userId]) {
   try {
     const userDoc = await getDoc(doc(db, 'users', order.userId));
     if (userDoc.exists()) {
       const data = userDoc.data();
-      newCache[order.userId] = `${data.prenom} ${data.nom} (${data.wilaya})`;
+      newCache[order.userId] = `${data.prenom} ${data.nom}`;
     } else {
       newCache[order.userId] = order.userEmail || 'Inconnu';
     }

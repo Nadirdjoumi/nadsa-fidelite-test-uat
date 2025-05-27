@@ -8,7 +8,9 @@ import {
   query,
   where,
   getDocs,
-  Timestamp
+  Timestamp,
+  doc,
+  getDoc
 } from 'firebase/firestore';
 
 const Dashboard = ({ user }) => {
@@ -16,34 +18,16 @@ const Dashboard = ({ user }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState('today');
+  const [userNames, setUserNames] = useState({});
 
   const isAdmin = user?.email === 'admin@admin.com';
 
-  // Extraire prénom depuis user.displayName ou email
-  const prenom = user?.displayName
-    ? user.displayName.split(' ')[0]
-    : user?.email
-      ? user.email.split('@')[0]
-      : 'Utilisateur';
-
-  // Fonction pour calculer points et remise selon montant
-  const calcPoints = montant => Math.floor(montant / 100);
-  // remise = points * 1.3 arrondi à la dizaine la plus proche
-  const calcRemise = points => Math.round(points * 1.3 / 10) * 10;
-
   const handleAddOrder = async () => {
-    if (!amount || isNaN(amount)) return;
+    if (!amount) return;
     setLoading(true);
-
-    const montantInt = Math.floor(parseFloat(amount)); // arrondi sans décimales
-    const points = calcPoints(montantInt);
-    const remise = calcRemise(points);
-
     await addDoc(collection(db, 'orders'), {
       userId: user.uid,
-      amount: montantInt,
-      points,
-      remise,
+      amount: parseFloat(amount),
       createdAt: Timestamp.now()
     });
     setAmount('');
@@ -64,6 +48,17 @@ const Dashboard = ({ user }) => {
     const snapshot = await getDocs(q);
     const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     setOrders(data);
+
+    if (isAdmin) {
+      const uniqueUserIds = [...new Set(data.map(o => o.userId))];
+      const names = {};
+      await Promise.all(uniqueUserIds.map(async userId => {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        names[userId] = userDoc.exists() ? userDoc.data().email || userId : userId;
+      }));
+      setUserNames(names);
+    }
+
     setLoading(false);
   };
 
@@ -75,32 +70,19 @@ const Dashboard = ({ user }) => {
     if (user) fetchOrders();
   }, [user]);
 
-  // Calcul dates
-  const startOfToday = new Date();
-  startOfToday.setHours(0,0,0,0);
+  const today = new Date().toISOString().split('T')[0];
+  const todayOrders = orders.filter(o => o.createdAt?.toDate && o.createdAt.toDate().toISOString().split('T')[0] === today);
+  const totalToday = todayOrders.reduce((sum, o) => sum + o.amount, 0);
+  const totalAll = orders.reduce((sum, o) => sum + o.amount, 0);
 
-  // Filtrer commandes du jour
-  const todayOrders = orders.filter(o => {
-    if (!o.createdAt?.toDate) return false;
-    const orderDate = o.createdAt.toDate();
-    return orderDate >= startOfToday;
-  });
+  const points = totalAll;
+  const discount = (points / 100 * 5).toFixed(2);
 
-  // Total aujourd’hui (utilisateur seulement)
-  const totalToday = todayOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
-
-  // Points cumulés (depuis début)
-  const totalPoints = orders.reduce((sum, o) => sum + (o.points || 0), 0);
-
-  // Remise cumulée (depuis début)
-  const totalRemise = orders.reduce((sum, o) => sum + (o.remise || 0), 0);
-
-  // Affichage commandes selon rôle + vue admin
   const displayedOrders = isAdmin && view === 'today' ? todayOrders : orders;
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.title}>Bienvenue {prenom}</h2>
+      <h2 style={styles.title}>Bienvenue {isAdmin ? 'Admin' : user.email}</h2>
       <button onClick={logout} style={styles.logout}>Se déconnecter</button>
 
       {!isAdmin && (
@@ -108,7 +90,7 @@ const Dashboard = ({ user }) => {
           <h3 style={styles.subtitle}>Ajouter une commande</h3>
           <input
             type="number"
-            placeholder="Montant en DA"
+            placeholder="Montant €"
             value={amount}
             onChange={e => setAmount(e.target.value)}
             style={styles.input}
@@ -118,9 +100,9 @@ const Dashboard = ({ user }) => {
           </button>
 
           <div style={styles.stats}>
-            <p><strong>Total aujourd'hui :</strong> {totalToday} DA</p>
-            <p><strong>Points cumulés :</strong> {totalPoints} pts</p>
-            <p><strong>Remise obtenue :</strong> {totalRemise} DA</p>
+            <p><strong>Total aujourd'hui :</strong> {totalToday.toFixed(2)} €</p>
+            <p><strong>Points cumulés :</strong> {points} pts</p>
+            <p><strong>Remise obtenue :</strong> {discount} €</p>
           </div>
         </div>
       )}
@@ -128,18 +110,8 @@ const Dashboard = ({ user }) => {
       {isAdmin && (
         <div style={styles.box}>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
-            <button
-              onClick={() => setView('today')}
-              style={{ ...styles.button, backgroundColor: view === 'today' ? '#7B2233' : '#ccc' }}
-            >
-              Commandes du jour
-            </button>
-            <button
-              onClick={() => setView('all')}
-              style={{ ...styles.button, backgroundColor: view === 'all' ? '#7B2233' : '#ccc' }}
-            >
-              Toutes les commandes
-            </button>
+            <button onClick={() => setView('today')} style={{ ...styles.button, background: view === 'today' ? '#2196f3' : '#ccc' }}>Commandes du jour</button>
+            <button onClick={() => setView('all')} style={{ ...styles.button, background: view === 'all' ? '#2196f3' : '#ccc' }}>Toutes les commandes</button>
           </div>
         </div>
       )}
@@ -151,11 +123,11 @@ const Dashboard = ({ user }) => {
           {displayedOrders.map(o => (
             <li key={o.id} style={styles.listItem}>
               <div>
-                <strong>{o.amount} DA</strong>
+                <strong>{o.amount} €</strong>
                 <br />
                 <small>{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'Date inconnue'}</small>
               </div>
-              {isAdmin && <small>Client: {o.userId}</small>}
+              {isAdmin && <small>Client: {userNames[o.userId] || o.userId}</small>}
             </li>
           ))}
         </ul>
@@ -167,44 +139,36 @@ const Dashboard = ({ user }) => {
 const styles = {
   container: {
     padding: 20,
-    fontFamily: 'Arial, sans-serif',
-    maxWidth: 600,
+    fontFamily: 'sans-serif',
+    maxWidth: 500,
     margin: '0 auto',
-    background: '#fff5f7', // rose pâle clair pour fond
-    minHeight: '100vh',
+    background: '#f9f9f9',
+    minHeight: '100vh'
   },
   title: {
-    fontSize: 26,
+    fontSize: 22,
     textAlign: 'center',
-    marginBottom: 20,
-    color: '#7B2233', // bordeaux foncé
-    fontWeight: 'bold',
+    marginBottom: 10
   },
   logout: {
     display: 'block',
     margin: '10px auto 30px auto',
-    background: '#7B2233',
+    background: '#bbb',
     border: 'none',
-    padding: '12px 30px',
-    borderRadius: 30,
-    color: 'white',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-    fontSize: 16,
-    transition: 'background-color 0.3s ease',
+    padding: 10,
+    borderRadius: 6,
+    cursor: 'pointer'
   },
   box: {
     background: 'white',
-    padding: 20,
-    borderRadius: 15,
+    padding: 15,
+    borderRadius: 10,
     marginBottom: 30,
-    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
   },
   subtitle: {
-    fontSize: 20,
-    marginBottom: 15,
-    color: '#7B2233',
-    fontWeight: '600',
+    fontSize: 18,
+    marginBottom: 10
   },
   input: {
     width: '100%',
@@ -212,44 +176,36 @@ const styles = {
     fontSize: 16,
     marginBottom: 10,
     borderRadius: 6,
-    border: '1px solid #ccc',
-    boxSizing: 'border-box'
+    border: '1px solid #ccc'
   },
   button: {
     width: '100%',
-    padding: 14,
+    padding: 12,
     fontSize: 16,
-    backgroundColor: '#7B2233',
+    background: '#4caf50',
     color: 'white',
     border: 'none',
-    borderRadius: 30,
-    cursor: 'pointer',
-    fontWeight: 'bold',
-    transition: 'background-color 0.3s ease',
+    borderRadius: 6,
+    cursor: 'pointer'
   },
   stats: {
-    marginTop: 20,
-    lineHeight: 1.6,
-    fontSize: 16,
-    color: '#333',
+    marginTop: 15,
+    lineHeight: 1.6
   },
   list: {
     listStyle: 'none',
     padding: 0,
-    marginTop: 15,
+    marginTop: 10
   },
   listItem: {
-    background: '#f7d9dc', // rose clair
-    marginBottom: 12,
-    padding: 14,
-    borderRadius: 10,
+    background: '#eee',
+    marginBottom: 10,
+    padding: 10,
+    borderRadius: 6,
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    color: '#7B2233',
-    fontWeight: '600',
-    boxShadow: '0 2px 6px rgba(123, 34, 51, 0.15)',
-  },
+    alignItems: 'center'
+  }
 };
 
 export default Dashboard;

@@ -34,39 +34,72 @@ const Login = () => {
         setLoading(false);
         return;
       }
-      try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-		
-await updateProfile(userCredential.user, {
-  displayName: prenom + ' ' + nom
-});
+      
+	  try {
+  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
-await setDoc(doc(db, 'users', userCredential.user.uid), {
-  prenom,
-  nom,
-  email,
-  wilaya,
-  createdAt: new Date()
-});
+  await updateProfile(userCredential.user, {
+    displayName: prenom + ' ' + nom
+  });
 
-		
-		
-		
-      } catch (err) {
-        setError(err.message);
-      }
+  await setDoc(doc(db, 'users', userCredential.user.uid), {
+    prenom,
+    nom,
+    email,
+    wilaya,
+    createdAt: new Date()
+  });
+
+} catch (err) {
+  console.log("Erreur d'inscription Firebase :", err);
+  switch (err.code) {
+    case 'auth/email-already-in-use':
+      setError("Cette adresse email est déjà utilisée.");
+      break;
+    case 'auth/invalid-email':
+      setError("Adresse email invalide.");
+      break;
+    case 'auth/weak-password':
+      setError("Le mot de passe est trop faible. Il doit contenir au moins 6 caractères.");
+      break;
+    case 'auth/operation-not-allowed':
+      setError("L'inscription par email/mot de passe n'est pas activée.");
+      break;
+    default:
+      setError("Erreur lors de l'inscription : " + err.message);
+  }
+}
+
+	  
     } else {
-      if (!email || !password) {
-        setError('Veuillez saisir email et mot de passe.');
-        setLoading(false);
-        return;
-      }
-      try {
-        await signInWithEmailAndPassword(auth, email, password);
-      } catch (err) {
-        setError(err.message);
-      }
+  if (!email || !password) {
+    setError('Veuillez saisir votre email et mot de passe.');
+    setLoading(false);
+    return;
+  }
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch (err) {
+    console.log("Erreur de connexion Firebase :", err);
+    switch (err.code) {
+      case 'auth/user-not-found':
+        setError("Aucun compte trouvé avec cette adresse email.");
+        break;
+      case 'auth/wrong-password':
+        setError("Mot de passe incorrect.");
+        break;
+      case 'auth/invalid-email':
+        setError("Adresse email invalide.");
+        break;
+      case 'auth/too-many-requests':
+        setError("Trop de tentatives échouées. Veuillez réessayer plus tard.");
+        break;
+      default:
+        setError("Erreur lors de la connexion : " + err.message);
     }
+  }
+}
+
 
     setLoading(false);
   };

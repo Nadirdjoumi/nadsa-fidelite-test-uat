@@ -1,3 +1,4 @@
+// src/Dashboard.jsx
 import React, { useEffect, useState } from 'react';
 import { auth, db } from './firebase';
 import { signOut } from 'firebase/auth';
@@ -7,9 +8,9 @@ import {
   query,
   where,
   getDocs,
+  Timestamp,
   getDoc,
   doc,
-  Timestamp
 } from 'firebase/firestore';
 
 const Dashboard = ({ user }) => {
@@ -17,6 +18,7 @@ const Dashboard = ({ user }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState('today');
+  const [usersCache, setUsersCache] = useState({});
 
   const isAdmin = user?.email === 'admin@admin.com';
 
@@ -27,7 +29,7 @@ const Dashboard = ({ user }) => {
       : 'Utilisateur';
 
   const calcPoints = montant => Math.floor(montant / 100);
-  const calcRemise = points => Math.round(points * 1.3 / 10) * 10;
+  const calcRemise = points => Math.round((points * 1.3) / 10) * 10;
 
   const handleAddOrder = async () => {
     if (!amount || isNaN(amount)) return;
@@ -39,10 +41,11 @@ const Dashboard = ({ user }) => {
 
     await addDoc(collection(db, 'orders'), {
       userId: user.uid,
+      userEmail: user.email,
       amount: montantInt,
       points,
       remise,
-      createdAt: Timestamp.now()
+      createdAt: Timestamp.now(),
     });
     setAmount('');
     fetchOrders();
@@ -60,27 +63,21 @@ const Dashboard = ({ user }) => {
     }
 
     const snapshot = await getDocs(q);
-    let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
     if (isAdmin) {
-      const userIds = [...new Set(data.map(o => o.userId))];
-      const userMap = {};
-
-      await Promise.all(userIds.map(async uid => {
-        const userDoc = await getDoc(doc(db, 'users', uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          const displayName = userData.displayName || userData.email || '';
-          userMap[uid] = displayName.split(' ')[0] || displayName.split('@')[0] || 'Client';
-        } else {
-          userMap[uid] = 'Client';
+      const newCache = { ...usersCache };
+      for (const order of data) {
+        if (!newCache[order.userId]) {
+          try {
+            const userDoc = await getDoc(doc(db, 'users', order.userId));
+            newCache[order.userId] = userDoc.exists() ? userDoc.data().email : order.userEmail || 'Inconnu';
+          } catch (e) {
+            newCache[order.userId] = 'Erreur';
+          }
         }
-      }));
-
-      data = data.map(o => ({
-        ...o,
-        userName: userMap[o.userId] || 'Client'
-      }));
+      }
+      setUsersCache(newCache);
     }
 
     setOrders(data);
@@ -108,12 +105,7 @@ const Dashboard = ({ user }) => {
   const totalPoints = orders.reduce((sum, o) => sum + (o.points || 0), 0);
   const totalRemise = orders.reduce((sum, o) => sum + (o.remise || 0), 0);
 
-  const displayedOrders = isAdmin
-  ? view === 'today'
-    ? todayOrders
-    : orders
-  : orders;
-
+  const displayedOrders = isAdmin && view === 'today' ? todayOrders : orders;
 
   return (
     <div style={styles.container}>
@@ -162,9 +154,7 @@ const Dashboard = ({ user }) => {
       )}
 
       <div style={styles.box}>
-        <h3 style={styles.subtitle}>
-          {isAdmin ? (view === 'today' ? 'Commandes du jour' : 'Toutes les commandes') : 'Historique'}
-        </h3>
+        <h3 style={styles.subtitle}>{isAdmin ? (view === 'today' ? 'Commandes du jour' : 'Toutes les commandes') : 'Historique'}</h3>
         {displayedOrders.length === 0 && <p>Aucune commande.</p>}
         <ul style={styles.list}>
           {displayedOrders.map(o => (
@@ -174,7 +164,12 @@ const Dashboard = ({ user }) => {
                 <br />
                 <small>{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'Date inconnue'}</small>
               </div>
-              {isAdmin && <small>Client : {o.userName || o.userId}</small>}
+              {isAdmin && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <small>Client : {usersCache[o.userId] || o.userEmail || o.userId}</small>
+                  <small>{o.userId}</small>
+                </div>
+              )}
             </li>
           ))}
         </ul>

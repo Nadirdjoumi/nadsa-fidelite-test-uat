@@ -1,4 +1,3 @@
-// src/Dashboard.jsx
 import React, { useEffect, useState } from 'react';
 import { auth, db } from './firebase';
 import { signOut } from 'firebase/auth';
@@ -8,9 +7,9 @@ import {
   query,
   where,
   getDocs,
-  Timestamp,
+  getDoc,
   doc,
-  getDoc
+  Timestamp
 } from 'firebase/firestore';
 
 const Dashboard = ({ user }) => {
@@ -18,16 +17,31 @@ const Dashboard = ({ user }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState('today');
-  const [userNames, setUserNames] = useState({});
 
   const isAdmin = user?.email === 'admin@admin.com';
 
+  const prenom = user?.displayName
+    ? user.displayName.split(' ')[0]
+    : user?.email
+      ? user.email.split('@')[0]
+      : 'Utilisateur';
+
+  const calcPoints = montant => Math.floor(montant / 100);
+  const calcRemise = points => Math.round(points * 1.3 / 10) * 10;
+
   const handleAddOrder = async () => {
-    if (!amount) return;
+    if (!amount || isNaN(amount)) return;
     setLoading(true);
+
+    const montantInt = Math.floor(parseFloat(amount));
+    const points = calcPoints(montantInt);
+    const remise = calcRemise(points);
+
     await addDoc(collection(db, 'orders'), {
       userId: user.uid,
-      amount: parseFloat(amount),
+      amount: montantInt,
+      points,
+      remise,
       createdAt: Timestamp.now()
     });
     setAmount('');
@@ -46,19 +60,30 @@ const Dashboard = ({ user }) => {
     }
 
     const snapshot = await getDocs(q);
-    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    setOrders(data);
+    let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
     if (isAdmin) {
-      const uniqueUserIds = [...new Set(data.map(o => o.userId))];
-      const names = {};
-      await Promise.all(uniqueUserIds.map(async userId => {
-        const userDoc = await getDoc(doc(db, 'users', userId));
-        names[userId] = userDoc.exists() ? userDoc.data().email || userId : userId;
+      const userIds = [...new Set(data.map(o => o.userId))];
+      const userMap = {};
+
+      await Promise.all(userIds.map(async uid => {
+        const userDoc = await getDoc(doc(db, 'users', uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          const displayName = userData.displayName || userData.email || '';
+          userMap[uid] = displayName.split(' ')[0] || displayName.split('@')[0] || 'Client';
+        } else {
+          userMap[uid] = 'Client';
+        }
       }));
-      setUserNames(names);
+
+      data = data.map(o => ({
+        ...o,
+        userName: userMap[o.userId] || 'Client'
+      }));
     }
 
+    setOrders(data);
     setLoading(false);
   };
 
@@ -70,19 +95,24 @@ const Dashboard = ({ user }) => {
     if (user) fetchOrders();
   }, [user]);
 
-  const today = new Date().toISOString().split('T')[0];
-  const todayOrders = orders.filter(o => o.createdAt?.toDate && o.createdAt.toDate().toISOString().split('T')[0] === today);
-  const totalToday = todayOrders.reduce((sum, o) => sum + o.amount, 0);
-  const totalAll = orders.reduce((sum, o) => sum + o.amount, 0);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
 
-  const points = totalAll;
-  const discount = (points / 100 * 5).toFixed(2);
+  const todayOrders = orders.filter(o => {
+    if (!o.createdAt?.toDate) return false;
+    const orderDate = o.createdAt.toDate();
+    return orderDate >= startOfToday;
+  });
+
+  const totalToday = todayOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
+  const totalPoints = orders.reduce((sum, o) => sum + (o.points || 0), 0);
+  const totalRemise = orders.reduce((sum, o) => sum + (o.remise || 0), 0);
 
   const displayedOrders = isAdmin && view === 'today' ? todayOrders : orders;
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.title}>Bienvenue {isAdmin ? 'Admin' : user.email}</h2>
+      <h2 style={styles.title}>Bienvenue {prenom}</h2>
       <button onClick={logout} style={styles.logout}>Se déconnecter</button>
 
       {!isAdmin && (
@@ -90,7 +120,7 @@ const Dashboard = ({ user }) => {
           <h3 style={styles.subtitle}>Ajouter une commande</h3>
           <input
             type="number"
-            placeholder="Montant €"
+            placeholder="Montant en DA"
             value={amount}
             onChange={e => setAmount(e.target.value)}
             style={styles.input}
@@ -100,9 +130,9 @@ const Dashboard = ({ user }) => {
           </button>
 
           <div style={styles.stats}>
-            <p><strong>Total aujourd'hui :</strong> {totalToday.toFixed(2)} €</p>
-            <p><strong>Points cumulés :</strong> {points} pts</p>
-            <p><strong>Remise obtenue :</strong> {discount} €</p>
+            <p><strong>Total aujourd'hui :</strong> {totalToday} DA</p>
+            <p><strong>Points cumulés :</strong> {totalPoints} pts</p>
+            <p><strong>Remise obtenue :</strong> {totalRemise} DA</p>
           </div>
         </div>
       )}
@@ -110,24 +140,36 @@ const Dashboard = ({ user }) => {
       {isAdmin && (
         <div style={styles.box}>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
-            <button onClick={() => setView('today')} style={{ ...styles.button, background: view === 'today' ? '#2196f3' : '#ccc' }}>Commandes du jour</button>
-            <button onClick={() => setView('all')} style={{ ...styles.button, background: view === 'all' ? '#2196f3' : '#ccc' }}>Toutes les commandes</button>
+            <button
+              onClick={() => setView('today')}
+              style={{ ...styles.button, backgroundColor: view === 'today' ? '#7B2233' : '#ccc' }}
+            >
+              Commandes du jour
+            </button>
+            <button
+              onClick={() => setView('all')}
+              style={{ ...styles.button, backgroundColor: view === 'all' ? '#7B2233' : '#ccc' }}
+            >
+              Toutes les commandes
+            </button>
           </div>
         </div>
       )}
 
       <div style={styles.box}>
-        <h3 style={styles.subtitle}>{isAdmin ? (view === 'today' ? 'Commandes du jour' : 'Toutes les commandes') : 'Historique'}</h3>
+        <h3 style={styles.subtitle}>
+          {isAdmin ? (view === 'today' ? 'Commandes du jour' : 'Toutes les commandes') : 'Historique'}
+        </h3>
         {displayedOrders.length === 0 && <p>Aucune commande.</p>}
         <ul style={styles.list}>
           {displayedOrders.map(o => (
             <li key={o.id} style={styles.listItem}>
               <div>
-                <strong>{o.amount} €</strong>
+                <strong>{o.amount} DA</strong>
                 <br />
                 <small>{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'Date inconnue'}</small>
               </div>
-              {isAdmin && <small>Client: {userNames[o.userId] || o.userId}</small>}
+              {isAdmin && <small>Client : {o.userName || o.userId}</small>}
             </li>
           ))}
         </ul>
@@ -139,36 +181,44 @@ const Dashboard = ({ user }) => {
 const styles = {
   container: {
     padding: 20,
-    fontFamily: 'sans-serif',
-    maxWidth: 500,
+    fontFamily: 'Arial, sans-serif',
+    maxWidth: 600,
     margin: '0 auto',
-    background: '#f9f9f9',
-    minHeight: '100vh'
+    background: '#fff5f7',
+    minHeight: '100vh',
   },
   title: {
-    fontSize: 22,
+    fontSize: 26,
     textAlign: 'center',
-    marginBottom: 10
+    marginBottom: 20,
+    color: '#7B2233',
+    fontWeight: 'bold',
   },
   logout: {
     display: 'block',
     margin: '10px auto 30px auto',
-    background: '#bbb',
+    background: '#7B2233',
     border: 'none',
-    padding: 10,
-    borderRadius: 6,
-    cursor: 'pointer'
+    padding: '12px 30px',
+    borderRadius: 30,
+    color: 'white',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    fontSize: 16,
+    transition: 'background-color 0.3s ease',
   },
   box: {
     background: 'white',
-    padding: 15,
-    borderRadius: 10,
+    padding: 20,
+    borderRadius: 15,
     marginBottom: 30,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
   },
   subtitle: {
-    fontSize: 18,
-    marginBottom: 10
+    fontSize: 20,
+    marginBottom: 15,
+    color: '#7B2233',
+    fontWeight: '600',
   },
   input: {
     width: '100%',
@@ -176,36 +226,44 @@ const styles = {
     fontSize: 16,
     marginBottom: 10,
     borderRadius: 6,
-    border: '1px solid #ccc'
+    border: '1px solid #ccc',
+    boxSizing: 'border-box'
   },
   button: {
     width: '100%',
-    padding: 12,
+    padding: 14,
     fontSize: 16,
-    background: '#4caf50',
+    backgroundColor: '#7B2233',
     color: 'white',
     border: 'none',
-    borderRadius: 6,
-    cursor: 'pointer'
+    borderRadius: 30,
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    transition: 'background-color 0.3s ease',
   },
   stats: {
-    marginTop: 15,
-    lineHeight: 1.6
+    marginTop: 20,
+    lineHeight: 1.6,
+    fontSize: 16,
+    color: '#333',
   },
   list: {
     listStyle: 'none',
     padding: 0,
-    marginTop: 10
+    marginTop: 15,
   },
   listItem: {
-    background: '#eee',
-    marginBottom: 10,
-    padding: 10,
-    borderRadius: 6,
+    background: '#f7d9dc',
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 10,
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center'
-  }
+    alignItems: 'center',
+    color: '#7B2233',
+    fontWeight: '600',
+    boxShadow: '0 2px 6px rgba(123, 34, 51, 0.15)',
+  },
 };
 
 export default Dashboard;

@@ -231,7 +231,7 @@ const styles = {
   toggleText: {
     marginTop: 15,
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: 16,
     color: '#555',
   },
   toggleButton: {

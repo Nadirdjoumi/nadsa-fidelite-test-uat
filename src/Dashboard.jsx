@@ -20,7 +20,7 @@ const Dashboard = ({ user }) => {
   const [view, setView] = useState('today');
   const [usersCache, setUsersCache] = useState({});
 
-  const isAdmin = user?.email === 'admin@admin.com';
+  const isAdmin = user?.email === 'admin@nadsa.com';
 
   const prenom = user?.displayName
     ? user.displayName.split(' ')[0]
@@ -265,6 +265,7 @@ const styles = {
     borderRadius: 15,
     marginBottom: 30,
     boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
+	overflow: 'hidden',
   },
   subtitle: {
     fontSize: 20,
@@ -279,6 +280,7 @@ const styles = {
     marginBottom: 10,
     borderRadius: 6,
     border: '1px solid #ccc',
+	boxSizing: 'border-box',
   },
   button: {
     width: '100%',

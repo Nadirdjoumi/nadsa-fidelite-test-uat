@@ -362,23 +362,42 @@ const Dashboard = ({ user }) => {
           </ul>
         )}
 
-        {isAdmin && !selectedClient &&
+        {isAdmin &&
           Object.entries(groupedByUser).map(([userId, userOrders]) => (
             <div key={userId} style={{ marginBottom: 30 }}>
-              <h4 style={{ color: '#7B2233', marginBottom: 10 }}>
-                {usersCache[userId] || userId}
-              </h4>
-              <ul style={styles.list}>
-                {userOrders.map(o => (
-                  <li key={o.id} style={styles.listItem}>
-                    <div>
-                      <strong>{o.amount} DA</strong> - {o.points} pts - {o.remise} DA
-                      <br />
-                      <small>{o.createdAt?.toDate?.().toLocaleString() || 'Date inconnue'}</small>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+
+	<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#7B2233', marginBottom: 8 }}>
+ 
+ <span>
+  <strong>Client :</strong>{' '}
+  <strong>{usersCache[userId] || userId}</strong>
+</span>
+
+  <span><strong>{userOrders.reduce((sum, o) => sum + (o.remise || 0), 0)} DA</strong></span>
+</div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
+                <thead>
+                  <tr style={{ background: '#f7d9dc', color: '#7B2233' }}>
+                    <th style={styles.th}>Montant</th>
+                    <th style={styles.th}>Date</th>
+                    <th style={styles.th}>Points</th>
+                    <th style={styles.th}>Remise</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userOrders.map(order => (
+                    <tr key={order.id}>
+                      <td style={styles.td}>{order.amount} DA</td>
+                      <td style={styles.td}>
+                        {order.createdAt?.toDate?.().toLocaleString() || 'Date inconnue'}
+                      </td>
+                      <td style={styles.td}>{order.points}</td>
+                      <td style={styles.td}>{order.remise} DA</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ))}
       </div>
@@ -387,65 +406,98 @@ const Dashboard = ({ user }) => {
 };
 
 const styles = {
-  container: { maxWidth: 600, margin: 'auto', padding: 20, fontFamily: 'Arial, sans-serif' },
-  title: { textAlign: 'center', color: '#7B2233' },
-  subtitle: { color: '#7B2233' },
-  logout: {
-    backgroundColor: '#7B2233',
-    color: 'white',
-    border: 'none',
-    padding: '8px 15px',
-    borderRadius: 5,
-    cursor: 'pointer',
+  container: {
+    padding: 20,
+    fontFamily: 'Arial, sans-serif',
+    maxWidth: 800,
+    margin: '0 auto',
+    background: '#fff5f7',
+    minHeight: '100vh',
+  },
+  title: {
+    fontSize: 26,
+    textAlign: 'center',
     marginBottom: 20,
-    float: 'right',
+    color: '#7B2233',
+    fontWeight: 'bold',
   },
-  input: {
-    padding: 8,
-    fontSize: 16,
-    width: '100%',
-    marginBottom: 10,
-    borderRadius: 5,
-    border: '1px solid #ccc',
-  },
-  button: {
-    backgroundColor: '#7B2233',
-    color: 'white',
+  logout: {
+    display: 'block',
+    margin: '10px auto 30px auto',
+    background: '#7B2233',
     border: 'none',
-    padding: '10px 15px',
-    borderRadius: 5,
+    padding: '12px 30px',
+    borderRadius: 30,
+    color: 'white',
     cursor: 'pointer',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   box: {
-    backgroundColor: '#fff3f4',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 20,
+    background: 'white',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 30,
+    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
+	overflow: 'hidden',
+  },
+  subtitle: {
+    fontSize: 20,
+    marginBottom: 15,
+    color: '#7B2233',
+    fontWeight: '600',
+  },
+  input: {
+    width: '100%',
+    padding: 10,
+    fontSize: 16,
+    marginBottom: 10,
+    borderRadius: 6,
+    border: '1px solid #ccc',
+	boxSizing: 'border-box',
+  },
+  button: {
+    width: '100%',
+    padding: 14,
+    fontSize: 16,
+    backgroundColor: '#7B2233',
+    color: 'white',
+    border: 'none',
+    borderRadius: 30,
+    cursor: 'pointer',
+    fontWeight: 'bold',
   },
   stats: {
-    marginTop: 15,
-    fontWeight: 'bold',
-    color: '#7B2233',
+    marginTop: 20,
+    lineHeight: 1.6,
+    fontSize: 16,
+    color: '#333',
   },
   list: {
-    listStyleType: 'none',
-    paddingLeft: 0,
+    listStyle: 'none',
+    padding: 0,
+    marginTop: 15,
   },
   listItem: {
-    backgroundColor: '#ffdede',
-    marginBottom: 5,
-    padding: 10,
-    borderRadius: 6,
+    background: '#f7d9dc',
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 10,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     color: '#7B2233',
+    fontWeight: '600',
+    boxShadow: '0 2px 6px rgba(123, 34, 51, 0.15)',
   },
   th: {
+    padding: '10px',
     borderBottom: '1px solid #ddd',
-    padding: 8,
+    textAlign: 'left',
   },
   td: {
-    borderBottom: '1px solid #ddd',
-    padding: 8,
-    textAlign: 'center',
+    padding: '10px',
+    borderBottom: '1px solid #eee',
   },
 };
 

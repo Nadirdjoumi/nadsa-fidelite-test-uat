@@ -259,158 +259,245 @@ const Dashboard = ({ user }) => {
           <p><strong>Total points :</strong> {selectedClient.totalPoints} pts</p>
           <p><strong>Total remise :</strong> {selectedClient.totalRemise} DA</p>
 
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
+            <thead>
+              <tr style={{ background: '#f7d9dc', color: '#7B2233' }}>
+                <th style={styles.th}>Montant</th>
+                <th style={styles.th}>Date</th>
+                <th style={styles.th}>Points</th>
+                <th style={styles.th}>Remise</th>
+              </tr>
+            </thead>
+            <tbody>
+              {selectedClient.orders.map(order => (
+                <tr key={order.id}>
+                  <td style={styles.td}>{order.amount} DA</td>
+                  <td style={styles.td}>
+                    {order.createdAt?.toDate?.().toLocaleString() || 'Date inconnue'}
+                  </td>
+                  <td style={styles.td}>{order.points}</td>
+                  <td style={styles.td}>{order.remise} DA</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
           <button
             onClick={handleUseRemise}
             disabled={loadingRemise}
             style={{ ...styles.button, marginBottom: 10 }}
           >
-            {loadingRemise ? 'Traitement...' : 'Utiliser la remise (remettre à zéro)'}
+            {loadingRemise ? 'Traitement...' : 'Utiliser la remise'}
           </button>
-
-          <h4>Commandes :</h4>
-          {selectedClient.orders.length === 0 && <p>Aucune commande.</p>}
-          <ul style={styles.list}>
-            {selectedClient.orders.map(order => (
-              <li key={order.id} style={styles.listItem}>
-                Montant: {order.amount} DA - Points: {order.points} - Remise: {order.remise} DA
-              </li>
-            ))}
-          </ul>
-
-          <button onClick={() => setSelectedClient(null)} style={styles.button}>
-            Retour à la recherche
+          <button
+            onClick={() => setSelectedClient(null)}
+            style={{ ...styles.button, backgroundColor: '#999' }}
+          >
+            OK
           </button>
         </div>
       )}
 
       {!isAdmin && (
-        <>
-          <div style={styles.box}>
-            <input
-              type="number"
-              placeholder="Montant de la commande en DA"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-              style={styles.input}
-            />
-            <button onClick={handleAddOrder} disabled={loading || !amount} style={styles.button}>
-              {loading ? 'Enregistrement...' : 'Ajouter la commande'}
-            </button>
-          </div>
+        <div style={styles.box}>
+          <h3 style={styles.subtitle}>Ajouter une commande</h3>
+          <input
+            type="number"
+            placeholder="Montant en DA"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+            style={styles.input}
+          />
+          <button onClick={handleAddOrder} style={styles.button} disabled={loading}>
+            {loading ? 'Envoi...' : 'Ajouter'}
+          </button>
 
-          <div style={styles.box}>
-            <h3 style={styles.subtitle}>Historique de vos commandes</h3>
-            {orders.length === 0 && <p>Aucune commande pour l'instant.</p>}
-            <ul style={styles.list}>
-              {orders.map(order => (
-                <li key={order.id} style={styles.listItem}>
-                  Montant: {order.amount} DA - Points: {order.points} - Remise: {order.remise} DA -{' '}
-                  {order.createdAt?.toDate
-                    ? order.createdAt.toDate().toLocaleString()
-                    : ''}
-                </li>
-              ))}
-            </ul>
+          <div style={styles.stats}>
+            <p><strong>Total aujourd'hui :</strong> {totalToday} DA</p>
+            <p><strong>Points cumulés :</strong> {totalPoints} pts</p>
+            <p><strong>Remise obtenue :</strong> {totalRemise} DA</p>
           </div>
-        </>
+        </div>
       )}
 
-      {isAdmin && (
-        <>
-          <div style={styles.box}>
-            <h3 style={styles.subtitle}>Statistiques globales</h3>
-            <p>Total aujourd'hui : {totalToday} DA</p>
-            <p>Total points : {totalPoints} pts</p>
-            <p>Total remise : {totalRemise} DA</p>
-
+      {isAdmin && !selectedClient && (
+        <div style={styles.box}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
             <button
-              onClick={() => setView(view === 'today' ? 'all' : 'today')}
-              style={styles.button}
+              onClick={() => setView('today')}
+              style={{ ...styles.button, backgroundColor: view === 'today' ? '#7B2233' : '#ccc' }}
             >
-              Voir {view === 'today' ? 'toutes les commandes' : 'commandes du jour'}
+              Commandes du jour
+            </button>
+            <button
+              onClick={() => setView('all')}
+              style={{ ...styles.button, backgroundColor: view === 'all' ? '#7B2233' : '#ccc' }}
+            >
+              Toutes les commandes
             </button>
           </div>
-
-          {view === 'all' && (
-            <div style={styles.box}>
-              <h3 style={styles.subtitle}>Toutes les commandes</h3>
-              {Object.entries(groupedByUser).map(([userId, userOrders]) => (
-                <div key={userId} style={{ marginBottom: 20 }}>
-                  <h4>
-                    {usersCache[userId] || 'Inconnu'} ({userOrders.length} commandes)
-                  </h4>
-                  <ul style={styles.list}>
-                    {userOrders.map(order => (
-                      <li key={order.id} style={styles.listItem}>
-                        Montant: {order.amount} DA - Points: {order.points} - Remise: {order.remise} DA -{' '}
-                        {order.createdAt?.toDate ? order.createdAt.toDate().toLocaleString() : ''}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
+        </div>
       )}
+
+      <div style={styles.box}>
+        <h3 style={styles.subtitle}>
+          {isAdmin ? (view === 'today' ? 'Commandes du jour par client' : 'Toutes les commandes par client') : 'Historique'}
+        </h3>
+
+        {!isAdmin && displayedOrders.length === 0 && <p>Aucune commande.</p>}
+
+        {isAdmin && Object.keys(groupedByUser).length === 0 && <p>Aucune commande.</p>}
+
+        {!isAdmin && (
+          <ul style={styles.list}>
+            {displayedOrders.map(o => (
+              <li key={o.id} style={styles.listItem}>
+                <div>
+                  <strong>{o.amount} DA</strong>
+                  <br />
+                  <small>{o.createdAt?.toDate?.().toLocaleString() || 'Date inconnue'}</small>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {isAdmin &&
+          Object.entries(groupedByUser).map(([userId, userOrders]) => (
+            <div key={userId} style={{ marginBottom: 30 }}>
+
+	<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#7B2233', marginBottom: 8 }}>
+ 
+ <span>
+  <strong>Client :</strong>{' '}
+  <strong>{usersCache[userId] || userId}</strong>
+</span>
+
+  <span><strong>{userOrders.reduce((sum, o) => sum + (o.remise || 0), 0)} DA</strong></span>
+</div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
+                <thead>
+                  <tr style={{ background: '#f7d9dc', color: '#7B2233' }}>
+                    <th style={styles.th}>Montant</th>
+                    <th style={styles.th}>Date</th>
+                    <th style={styles.th}>Points</th>
+                    <th style={styles.th}>Remise</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userOrders.map(order => (
+                    <tr key={order.id}>
+                      <td style={styles.td}>{order.amount} DA</td>
+                      <td style={styles.td}>
+                        {order.createdAt?.toDate?.().toLocaleString() || 'Date inconnue'}
+                      </td>
+                      <td style={styles.td}>{order.points}</td>
+                      <td style={styles.td}>{order.remise} DA</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+      </div>
     </div>
   );
 };
 
 const styles = {
   container: {
-    maxWidth: 800,
-    margin: '20px auto',
+    padding: 20,
     fontFamily: 'Arial, sans-serif',
+    maxWidth: 800,
+    margin: '0 auto',
+    background: '#fff5f7',
+    minHeight: '100vh',
   },
   title: {
+    fontSize: 26,
     textAlign: 'center',
-    color: '#4a4a4a',
-  },
-  subtitle: {
-    color: '#444',
-  },
-  box: {
-    border: '1px solid #ddd',
-    padding: 15,
     marginBottom: 20,
-    borderRadius: 5,
-    backgroundColor: '#fafafa',
-  },
-  input: {
-    padding: 8,
-    width: '100%',
-    marginBottom: 10,
-    borderRadius: 4,
-    border: '1px solid #ccc',
-    fontSize: 16,
-  },
-  button: {
-    padding: '10px 15px',
-    backgroundColor: '#4a90e2',
-    color: 'white',
-    border: 'none',
-    borderRadius: 4,
-    cursor: 'pointer',
+    color: '#7B2233',
+    fontWeight: 'bold',
   },
   logout: {
-    position: 'absolute',
-    right: 20,
-    top: 20,
-    backgroundColor: '#e94e4e',
+    display: 'block',
+    margin: '10px auto 30px auto',
+    background: '#7B2233',
+    border: 'none',
+    padding: '12px 30px',
+    borderRadius: 30,
+    color: 'white',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  box: {
+    background: 'white',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 30,
+    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
+	overflow: 'hidden',
+  },
+  subtitle: {
+    fontSize: 20,
+    marginBottom: 15,
+    color: '#7B2233',
+    fontWeight: '600',
+  },
+  input: {
+    width: '100%',
+    padding: 10,
+    fontSize: 16,
+    marginBottom: 10,
+    borderRadius: 6,
+    border: '1px solid #ccc',
+	boxSizing: 'border-box',
+  },
+  button: {
+    width: '100%',
+    padding: 14,
+    fontSize: 16,
+    backgroundColor: '#7B2233',
     color: 'white',
     border: 'none',
-    padding: '8px 12px',
-    borderRadius: 4,
+    borderRadius: 30,
     cursor: 'pointer',
+    fontWeight: 'bold',
+  },
+  stats: {
+    marginTop: 20,
+    lineHeight: 1.6,
+    fontSize: 16,
+    color: '#333',
   },
   list: {
     listStyle: 'none',
-    paddingLeft: 0,
+    padding: 0,
+    marginTop: 15,
   },
   listItem: {
-    padding: '5px 0',
+    background: '#f7d9dc',
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 10,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    color: '#7B2233',
+    fontWeight: '600',
+    boxShadow: '0 2px 6px rgba(123, 34, 51, 0.15)',
+  },
+  th: {
+    padding: '10px',
     borderBottom: '1px solid #ddd',
+    textAlign: 'left',
+  },
+  td: {
+    padding: '10px',
+    borderBottom: '1px solid #eee',
   },
 };
 

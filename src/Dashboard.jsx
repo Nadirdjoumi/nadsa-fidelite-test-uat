@@ -19,6 +19,10 @@ const Dashboard = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState('today');
   const [usersCache, setUsersCache] = useState({});
+  
+  
+  const [prenom, setPrenom] = useState('');
+  
 
   // Nouveaux états pour la recherche et gestion du client sélectionné
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,6 +100,23 @@ const Dashboard = ({ user }) => {
     setOrders(data);
     setLoading(false);
   };
+  
+  
+  
+  const fetchPrenom = async () => {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      setPrenom(data.prenom || '');
+    }
+  } catch (error) {
+    console.error("Erreur lors de la récupération du prénom :", error);
+  }
+};
+
+  
+  
 
   // Nouvelle fonction de recherche côté admin
   const handleSearchChange = async e => {
@@ -190,6 +211,7 @@ const Dashboard = ({ user }) => {
 
   useEffect(() => {
     if (user) fetchOrders();
+	fetchPrenom(); 
   }, [user]);
 
   const startOfToday = new Date();

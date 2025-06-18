@@ -298,7 +298,16 @@ const Dashboard = ({ user }) => {
         </div>
       )}
 
-
+      {!isAdmin && (
+        <div style={styles.box}>
+          <h3 style={styles.subtitle}>Mes Points NADSA</h3>
+          <div style={styles.stats}>
+            <p><strong>Mon Total aujourd'hui :</strong> {totalToday} DA</p>
+            <p><strong>Mes Points cumulés :</strong> {totalPoints} pts</p>
+            <p><strong>Ma Remise obtenue :</strong> {totalRemise} DA</p>
+          </div>
+        </div>
+      )}
 
       {isAdmin && !selectedClient && (
         <div style={styles.box}>

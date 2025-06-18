@@ -7,12 +7,12 @@ import { getFirestore } from "firebase/firestore";
 
 // ⚠️ Remplace ceci par les vraies infos que Firebase t’a données
 const firebaseConfig = {
-  apiKey: "AIzaSyAgZwOWhw2T9nu7rUVHly407ICK4BT0oIo",
-  authDomain: "nadsa-fidelite.firebaseapp.com",
-  projectId: "nadsa-fidelite",
-  storageBucket: "nadsa-fidelite.firebasestorage.app",
-  messagingSenderId: "304170417691",
-  appId: "1:304170417691:web:74c5c03b06b61bf88982be",
+  apiKey: "AIzaSyCduuI1nI0flA_dQbPlMKeoIrqrGYvgyXA",
+  authDomain: "nadsa-fidelite-uat.firebaseapp.com",
+  projectId: "nadsa-fidelite-uat",
+  storageBucket: "nadsa-fidelite-uat.firebasestorage.app",
+  messagingSenderId: "931867942247",
+  appId: "1:931867942247:web:b2fb2c6e28964013d763c2"
   measurementId: "G-SJQSRMZD4P"
 };
 

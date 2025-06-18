@@ -1,70 +1,43 @@
-"use client";
-import { useState, useEffect } from 'react';
-import { db, auth } from './firebase';
+import React, { useEffect, useState } from 'react';
+import { auth, db } from './firebase';
+import { signOut } from 'firebase/auth';
 import {
   collection,
+  addDoc,
   query,
   where,
   getDocs,
-  addDoc,
   Timestamp,
   getDoc,
   doc,
   updateDoc,
 } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
 
-const Dashboard = () => {
-  const [user, setUser] = useState(null);
+const Dashboard = ({ user }) => {
   const [amount, setAmount] = useState('');
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [totalPoints, setTotalPoints] = useState(0);
-  const [totalRemise, setTotalRemise] = useState(0);
-  const [totalToday, setTotalToday] = useState(0);
-  const [allUsers, setAllUsers] = useState([]);
-  const [search, setSearch] = useState('');
+  const [view, setView] = useState('today');
+  const [usersCache, setUsersCache] = useState({});
+
+  // Nouveaux états pour la recherche et gestion du client sélectionné
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
-  const [clientOrders, setClientOrders] = useState([]);
+  const [loadingRemise, setLoadingRemise] = useState(false);
 
-  const isAdmin = user?.email === 'admin@admin.fr';
+  const isAdmin = user?.email === 'admin@admin.com';
 
-  useEffect(() => {
-    onAuthStateChanged(auth, setUser);
-  }, []);
+  const prenom = user?.displayName
+    ? user.displayName.split(' ')[0]
+    : user?.email
+    ? user.email.split('@')[0]
+    : 'Utilisateur';
 
-  useEffect(() => {
-    const fetchAllUsers = async () => {
-      const usersSnapshot = await getDocs(collection(db, 'users'));
-      const usersList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAllUsers(usersList);
-    };
-    fetchAllUsers();
-  }, []);
+  const calcPoints = montant => Math.floor(montant / 100);
+  const calcRemise = points => Math.round((points * 2.7) / 10) * 10;
 
-  useEffect(() => {
-    if (user && !isAdmin) {
-      fetchUserStats(user.uid);
-    }
-  }, [user]);
-
-  const fetchUserStats = async (userId) => {
-    const q = query(collection(db, 'orders'), where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
-    const orders = querySnapshot.docs.map(doc => doc.data());
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayOrders = orders.filter(order => order.createdAt.toDate() >= today);
-    const totalToday = todayOrders.reduce((sum, order) => sum + order.amount, 0);
-    const totalPoints = orders.reduce((sum, order) => sum + order.points, 0);
-    const totalRemise = orders.reduce((sum, order) => sum + order.remise, 0);
-
-    setTotalToday(totalToday);
-    setTotalPoints(totalPoints);
-    setTotalRemise(totalRemise);
-  };
-
-  const handleAddOrderAdmin = async (targetUserId, targetEmail) => {
+  const handleAddOrder = async () => {
     if (!amount || isNaN(amount)) return;
     setLoading(true);
 
@@ -73,8 +46,8 @@ const Dashboard = () => {
     const remise = calcRemise(points);
 
     await addDoc(collection(db, 'orders'), {
-      userId: targetUserId,
-      userEmail: targetEmail,
+      userId: user.uid,
+      userEmail: user.email,
       amount: montantInt,
       points,
       remise,
@@ -82,89 +55,196 @@ const Dashboard = () => {
     });
 
     setAmount('');
-    await handleSelectClient(targetUserId);
+    fetchOrders();
     setLoading(false);
   };
 
-  const handleUseRemise = async () => {
-    if (!selectedClient) return;
+  // Fonction pour fetch toutes les commandes (admin ou user)
+  const fetchOrders = async () => {
+    setLoading(true);
+    let q;
 
-    const userRef = doc(db, 'users', selectedClient.userId);
-    await updateDoc(userRef, { usedRemise: selectedClient.totalRemise });
+    if (isAdmin) {
+      q = query(collection(db, 'orders'));
+    } else {
+      q = query(collection(db, 'orders'), where('userId', '==', user.uid));
+    }
 
-    await handleSelectClient(selectedClient.userId);
+    const snapshot = await getDocs(q);
+    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    if (isAdmin) {
+      const newCache = { ...usersCache };
+      for (const order of data) {
+        if (!newCache[order.userId]) {
+          try {
+            const userDoc = await getDoc(doc(db, 'users', order.userId));
+            if (userDoc.exists()) {
+              const dataUser = userDoc.data();
+              newCache[order.userId] = `${dataUser.prenom} ${dataUser.nom}`;
+            } else {
+              newCache[order.userId] = order.userEmail || 'Inconnu';
+            }
+          } catch (e) {
+            newCache[order.userId] = 'Erreur';
+          }
+        }
+      }
+      setUsersCache(newCache);
+    }
+
+    setOrders(data);
+    setLoading(false);
   };
 
-  const calcPoints = (amount) => {
-    if (amount >= 10000) return 100;
-    if (amount >= 5000) return 50;
-    if (amount >= 1000) return 10;
-    return 0;
+  // Nouvelle fonction de recherche côté admin
+  const handleSearchChange = async e => {
+    const val = e.target.value;
+    setSearchTerm(val);
+    setSelectedClient(null); // reset sélection client
+
+    if (val.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    // Recherche dans usersCache en filtrant sur prénom + nom (en minuscule)
+    const lowerVal = val.toLowerCase();
+
+    // On récupère les userIds des clients ayant commandé
+    const userIdsWithOrders = [...new Set(orders.map(o => o.userId))];
+
+    // Filtrer usersCache par recherche sur nom/prenom + userIds ayant commandé
+    const filtered = userIdsWithOrders
+      .map(userId => ({
+        userId,
+        name: usersCache[userId] || '',
+      }))
+      .filter(({ name }) => name.toLowerCase().includes(lowerVal));
+
+    setSearchResults(filtered);
   };
 
-  const calcRemise = (points) => {
-    if (points >= 100) return 1000;
-    if (points >= 50) return 400;
-    if (points >= 10) return 50;
-    return 0;
-  };
+  // Au clic sur un client dans la recherche, on récupère ses commandes et infos
+  const handleSelectClient = async userId => {
+    setLoading(true);
+    setSelectedClient(null);
 
-  const handleSelectClient = async (userId) => {
-    const userRef = doc(db, 'users', userId);
-    const userSnap = await getDoc(userRef);
-    const userData = userSnap.data();
-
+    // Récupérer commandes du client
     const q = query(collection(db, 'orders'), where('userId', '==', userId));
-    const ordersSnap = await getDocs(q);
-    const orders = ordersSnap.docs.map(doc => doc.data());
+    const snapshot = await getDocs(q);
+    const userOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    const totalPoints = orders.reduce((sum, o) => sum + o.points, 0);
-    const totalRemise = orders.reduce((sum, o) => sum + o.remise, 0);
-    const usedRemise = userData.usedRemise || 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const totalToday = orders.filter(o => o.createdAt.toDate() >= today).reduce((sum, o) => sum + o.amount, 0);
+    // Récupérer infos client dans 'users'
+    let clientName = usersCache[userId] || 'Inconnu';
+    try {
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      if (userDoc.exists()) {
+        const dataUser = userDoc.data();
+        clientName = `${dataUser.prenom} ${dataUser.nom}`;
+      }
+    } catch (e) {}
+
+    // Calculer total remise et total points du client
+    const totalPointsClient = userOrders.reduce((sum, o) => sum + (o.points || 0), 0);
+    const totalRemiseClient = userOrders.reduce((sum, o) => sum + (o.remise || 0), 0);
 
     setSelectedClient({
-      name: userData.email,
       userId,
-      totalPoints,
-      totalRemise: totalRemise - usedRemise,
-      totalToday,
+      name: clientName,
+      orders: userOrders,
+      totalPoints: totalPointsClient,
+      totalRemise: totalRemiseClient,
     });
-    setClientOrders(orders);
+
+    setLoading(false);
   };
+
+  // Fonction pour remettre à zéro la remise / points du client (utiliser la remise)
+  const handleUseRemise = async () => {
+    if (!selectedClient) return;
+    setLoadingRemise(true);
+
+    // Mettre à jour toutes les commandes du client à points=0 et remise=0
+    // OU une autre logique métier (ici on reset toutes ses commandes ?)
+    // Sinon, on peut créer une collection "usedRemises" ou autre
+    // Ici on simplifie en mettant à 0 toutes les remises et points dans ses commandes
+
+    const batchUpdates = selectedClient.orders.map(order =>
+      updateDoc(doc(db, 'orders', order.id), { points: 0, remise: 0 })
+    );
+
+    await Promise.all(batchUpdates);
+
+    // Recharge les commandes et infos client à jour
+    await fetchOrders();
+
+    // Reset sélection client et retour accueil admin
+    setSelectedClient(null);
+    setSearchTerm('');
+    setSearchResults([]);
+    setLoadingRemise(false);
+  };
+
+  const logout = () => signOut(auth);
+
+  useEffect(() => {
+    if (user) fetchOrders();
+  }, [user]);
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const todayOrders = orders.filter(o => {
+    if (!o.createdAt?.toDate) return false;
+    const orderDate = o.createdAt.toDate();
+    return orderDate >= startOfToday;
+  });
+
+  const totalToday = todayOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
+  const totalPoints = orders.reduce((sum, o) => sum + (o.points || 0), 0);
+  const totalRemise = orders.reduce((sum, o) => sum + (o.remise || 0), 0);
+
+  const displayedOrders = isAdmin && view === 'today' ? todayOrders : orders;
+
+  const groupedByUser = isAdmin
+    ? displayedOrders.reduce((acc, order) => {
+        if (!acc[order.userId]) acc[order.userId] = [];
+        acc[order.userId].push(order);
+        return acc;
+      }, {})
+    : {};
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.title}>Tableau de bord</h2>
+      <h2 style={styles.title}>Bienvenue {prenom}</h2>
+      <button onClick={logout} style={styles.logout}>Se déconnecter</button>
 
-      {!isAdmin && (
-        <div style={styles.box}>
-          <h3 style={styles.subtitle}>Mes informations</h3>
-          <div style={styles.stats}>
-            <p><strong>Total aujourd'hui :</strong> {totalToday} DA</p>
-            <p><strong>Points cumulés :</strong> {totalPoints} pts</p>
-            <p><strong>Remise obtenue :</strong> {totalRemise} DA</p>
-          </div>
-        </div>
-      )}
-
-      {isAdmin && (
-        <div style={styles.box}>
-          <h3 style={styles.subtitle}>Rechercher un client</h3>
+      {/* Barre de recherche admin */}
+      {isAdmin && !selectedClient && (
+        <div style={{ marginBottom: 30 }}>
           <input
             type="text"
-            placeholder="Nom ou email"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher un client par prénom ou nom"
+            value={searchTerm}
+            onChange={handleSearchChange}
             style={styles.input}
           />
-          {search.length > 1 && (
-            <ul style={styles.list}>
-              {allUsers.filter(u => u.email.includes(search)).map(u => (
-                <li key={u.id} onClick={() => handleSelectClient(u.id)} style={styles.listItem}>
-                  {u.email}
+          {searchResults.length > 0 && (
+            <ul style={{ ...styles.list, maxHeight: 150, overflowY: 'auto', marginTop: 5 }}>
+              {searchResults.map(({ userId, name }) => (
+                <li
+                  key={userId}
+                  onClick={() => handleSelectClient(userId)}
+                  style={{ 
+                    ...styles.listItem, 
+                    cursor: 'pointer', 
+                    backgroundColor: '#ffdede',
+                    textAlign: 'center',
+                    color: '#7B2233'
+                  }}
+                >
+                  {name}
                 </li>
               ))}
             </ul>
@@ -172,45 +252,135 @@ const Dashboard = () => {
         </div>
       )}
 
+      {/* Détails du client sélectionné */}
       {isAdmin && selectedClient && (
         <div style={styles.box}>
-          <h3 style={styles.subtitle}>Client : {selectedClient.name}</h3>
-          <p>Total aujourd'hui : {selectedClient.totalToday} DA</p>
-          <p>Points cumulés : {selectedClient.totalPoints}</p>
-          <p>Remise disponible : {selectedClient.totalRemise} DA</p>
+          <h3 style={styles.subtitle}>Détails client : {selectedClient.name}</h3>
+          <p><strong>Total points :</strong> {selectedClient.totalPoints} pts</p>
+          <p><strong>Total remise :</strong> {selectedClient.totalRemise} DA</p>
 
-          <div style={{ marginTop: 15 }}>
-            <h4>Ajouter une commande</h4>
-            <input
-              type="number"
-              placeholder="Montant en DA"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-              style={styles.input}
-            />
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
+            <thead>
+              <tr style={{ background: '#f7d9dc', color: '#7B2233' }}>
+                <th style={styles.th}>Montant</th>
+                <th style={styles.th}>Date</th>
+                <th style={styles.th}>Points</th>
+                <th style={styles.th}>Remise</th>
+              </tr>
+            </thead>
+            <tbody>
+              {selectedClient.orders.map(order => (
+                <tr key={order.id}>
+                  <td style={styles.td}>{order.amount} DA</td>
+                  <td style={styles.td}>
+                    {order.createdAt?.toDate?.().toLocaleString() || 'Date inconnue'}
+                  </td>
+                  <td style={styles.td}>{order.points}</td>
+                  <td style={styles.td}>{order.remise} DA</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <button
+            onClick={handleUseRemise}
+            disabled={loadingRemise}
+            style={{ ...styles.button, marginBottom: 10 }}
+          >
+            {loadingRemise ? 'Traitement...' : 'Utiliser la remise'}
+          </button>
+          <button
+            onClick={() => setSelectedClient(null)}
+            style={{ ...styles.button, backgroundColor: '#999' }}
+          >
+            OK
+          </button>
+        </div>
+      )}
+
+
+
+      {isAdmin && !selectedClient && (
+        <div style={styles.box}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
             <button
-              onClick={() => handleAddOrderAdmin(selectedClient.userId, selectedClient.name)}
-              style={styles.button}
-              disabled={loading}
+              onClick={() => setView('today')}
+              style={{ ...styles.button, backgroundColor: view === 'today' ? '#7B2233' : '#ccc' }}
             >
-              {loading ? 'Ajout en cours...' : 'Ajouter'}
+              Commandes du jour
+            </button>
+            <button
+              onClick={() => setView('all')}
+              style={{ ...styles.button, backgroundColor: view === 'all' ? '#7B2233' : '#ccc' }}
+            >
+              Toutes les commandes
             </button>
           </div>
+        </div>
+      )}
 
-          <button onClick={handleUseRemise} style={{ ...styles.button, backgroundColor: '#f44336' }}>
-            Utiliser la remise
-          </button>
+      <div style={styles.box}>
+        <h3 style={styles.subtitle}>
+          {isAdmin ? (view === 'today' ? 'Commandes du jour par client' : 'Toutes les commandes par client') : 'Historique'}
+        </h3>
 
-          <h4 style={{ marginTop: 20 }}>Historique des commandes</h4>
-          <ul>
-            {clientOrders.map((order, index) => (
-              <li key={index}>
-                {order.amount} DA - {order.points} pts - {order.remise} DA remise
+        {!isAdmin && displayedOrders.length === 0 && <p>Aucune commande.</p>}
+
+        {isAdmin && Object.keys(groupedByUser).length === 0 && <p>Aucune commande.</p>}
+
+        {!isAdmin && (
+          <ul style={styles.list}>
+            {displayedOrders.map(o => (
+              <li key={o.id} style={styles.listItem}>
+                <div>
+                  <strong>{o.amount} DA</strong>
+                  <br />
+                  <small>{o.createdAt?.toDate?.().toLocaleString() || 'Date inconnue'}</small>
+                </div>
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        )}
+
+        {isAdmin &&
+          Object.entries(groupedByUser).map(([userId, userOrders]) => (
+            <div key={userId} style={{ marginBottom: 30 }}>
+
+	<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#7B2233', marginBottom: 8 }}>
+ 
+ <span>
+  <strong>Client :</strong>{' '}
+  <strong>{usersCache[userId] || userId}</strong>
+</span>
+
+  <span><strong>{userOrders.reduce((sum, o) => sum + (o.remise || 0), 0)} DA</strong></span>
+</div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
+                <thead>
+                  <tr style={{ background: '#f7d9dc', color: '#7B2233' }}>
+                    <th style={styles.th}>Montant</th>
+                    <th style={styles.th}>Date</th>
+                    <th style={styles.th}>Points</th>
+                    <th style={styles.th}>Remise</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userOrders.map(order => (
+                    <tr key={order.id}>
+                      <td style={styles.td}>{order.amount} DA</td>
+                      <td style={styles.td}>
+                        {order.createdAt?.toDate?.().toLocaleString() || 'Date inconnue'}
+                      </td>
+                      <td style={styles.td}>{order.points}</td>
+                      <td style={styles.td}>{order.remise} DA</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+      </div>
     </div>
   );
 };
@@ -218,58 +388,96 @@ const Dashboard = () => {
 const styles = {
   container: {
     padding: 20,
-    maxWidth: 600,
-    margin: 'auto',
+    fontFamily: 'Arial, sans-serif',
+    maxWidth: 800,
+    margin: '0 auto',
+    background: '#fff5f7',
+    minHeight: '100vh',
   },
   title: {
     fontSize: 26,
-    fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 20,
+    color: '#7B2233',
+    fontWeight: 'bold',
+  },
+  logout: {
+    display: 'block',
+    margin: '10px auto 30px auto',
+    background: '#7B2233',
+    border: 'none',
+    padding: '12px 30px',
+    borderRadius: 30,
+    color: 'white',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   box: {
-    backgroundColor: '#fff',
+    background: 'white',
     padding: 20,
-    borderRadius: 10,
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    borderRadius: 15,
     marginBottom: 30,
+    boxShadow: '0 3px 10px rgba(123, 34, 51, 0.3)',
+	overflow: 'hidden',
   },
   subtitle: {
     fontSize: 20,
-    fontWeight: 'bold',
     marginBottom: 15,
+    color: '#7B2233',
+    fontWeight: '600',
   },
   input: {
-    padding: 10,
     width: '100%',
-    marginBottom: 15,
-    borderRadius: 5,
+    padding: 10,
+    fontSize: 16,
+    marginBottom: 10,
+    borderRadius: 6,
     border: '1px solid #ccc',
+	boxSizing: 'border-box',
   },
   button: {
-    padding: '10px 20px',
-    backgroundColor: '#4CAF50',
-    color: '#fff',
+    width: '100%',
+    padding: 14,
+    fontSize: 16,
+    backgroundColor: '#7B2233',
+    color: 'white',
     border: 'none',
-    borderRadius: 5,
+    borderRadius: 30,
     cursor: 'pointer',
+    fontWeight: 'bold',
+  },
+  stats: {
+    marginTop: 20,
+    lineHeight: 1.6,
+    fontSize: 16,
+    color: '#333',
   },
   list: {
     listStyle: 'none',
     padding: 0,
-    marginTop: 10,
-    maxHeight: 150,
-    overflowY: 'auto',
-    border: '1px solid #ccc',
-    borderRadius: 5,
+    marginTop: 15,
   },
   listItem: {
-    padding: 10,
-    borderBottom: '1px solid #eee',
-    cursor: 'pointer',
+    background: '#f7d9dc',
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 10,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    color: '#7B2233',
+    fontWeight: '600',
+    boxShadow: '0 2px 6px rgba(123, 34, 51, 0.15)',
   },
-  stats: {
-    lineHeight: 1.8,
+  th: {
+    padding: '10px',
+    borderBottom: '1px solid #ddd',
+    textAlign: 'left',
+  },
+  td: {
+    padding: '10px',
+    borderBottom: '1px solid #eee',
   },
 };
 

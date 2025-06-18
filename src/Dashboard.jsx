@@ -25,6 +25,9 @@ const Dashboard = ({ user }) => {
   const [searchResults, setSearchResults] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [loadingRemise, setLoadingRemise] = useState(false);
+  
+  const [adminMontant, setAdminMontant] = useState('');
+  const [addingMontant, setAddingMontant] = useState(false);
 
   const isAdmin = user?.email === 'admin@admin.com';
 
@@ -185,6 +188,34 @@ const Dashboard = ({ user }) => {
     setSearchResults([]);
     setLoadingRemise(false);
   };
+  
+  // Fonction pour ajouter une commande à un client
+  const handleAddMontantToClient = async () => {
+  if (!selectedClient || isNaN(adminMontant) || !adminMontant) return;
+
+  setAddingMontant(true);
+
+  const montantInt = Math.floor(parseFloat(adminMontant));
+  const points = calcPoints(montantInt);
+  const remise = calcRemise(points);
+
+  await addDoc(collection(db, 'orders'), {
+    userId: selectedClient.userId,
+    userEmail: '', // si tu veux, tu peux stocker l'email du client ici
+    amount: montantInt,
+    points,
+    remise,
+    createdAt: Timestamp.now(),
+  });
+
+  setAdminMontant('');
+  await handleSelectClient(selectedClient.userId);
+  await fetchOrders();
+
+  setAddingMontant(false);
+};
+
+  
 
   const logout = () => signOut(auth);
 
@@ -289,6 +320,25 @@ const Dashboard = ({ user }) => {
           >
             {loadingRemise ? 'Traitement...' : 'Utiliser la remise'}
           </button>
+		  
+<div style={{ marginBottom: 10 }}>
+  <input
+    type="number"
+    placeholder="Ajouter un montant"
+    value={adminMontant}
+    onChange={e => setAdminMontant(e.target.value)}
+    style={styles.input}
+  />
+  <button
+    onClick={handleAddMontantToClient}
+    disabled={addingMontant}
+    style={{ ...styles.button, backgroundColor: '#227B33', marginTop: 5 }}
+  >
+    {addingMontant ? 'Ajout en cours...' : 'Ajouter ce montant'}
+  </button>
+</div>
+
+		  
           <button
             onClick={() => setSelectedClient(null)}
             style={{ ...styles.button, backgroundColor: '#999' }}

@@ -448,7 +448,8 @@ const styles = {
   container: {
     padding: 20,
     fontFamily: 'Arial, sans-serif',
-    maxWidth: 800,
+    minHeight: '100vh',        // Prend toute la hauteur visible
+    width: '100vw',            // Prend toute la largeur visible
     margin: '0 auto',
     background: '#fff5f7',
     minHeight: '100vh',

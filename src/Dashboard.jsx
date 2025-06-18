@@ -449,10 +449,9 @@ const styles = {
     padding: 20,
     fontFamily: 'Arial, sans-serif',
     minHeight: '100vh',        // Prend toute la hauteur visible
-    width: '100vw',            // Prend toute la largeur visible
+    maxWidth: '100vw',            // Prend toute la largeur visible
     margin: '0 auto',
     background: '#fff5f7',
-    minHeight: '100vh',
   },
   title: {
     fontSize: 26,

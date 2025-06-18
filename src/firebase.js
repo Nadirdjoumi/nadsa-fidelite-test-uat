@@ -12,7 +12,7 @@ const firebaseConfig = {
   projectId: "nadsa-fidelite-uat",
   storageBucket: "nadsa-fidelite-uat.firebasestorage.app",
   messagingSenderId: "931867942247",
-  appId: "1:931867942247:web:b2fb2c6e28964013d763c2"
+  appId: "1:931867942247:web:b2fb2c6e28964013d763c2",
   measurementId: "G-SJQSRMZD4P"
 };
 

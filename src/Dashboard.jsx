@@ -446,10 +446,12 @@ const Dashboard = ({ user }) => {
 
 const styles = {
   container: {
-    padding: 20,
+    //padding: 20,
     fontFamily: 'Arial, sans-serif',
     minHeight: '100vh',        // Prend toute la hauteur visible
-    maxWidth: '100vw',            // Prend toute la largeur visible
+    width: '100vw',            // Prend toute la largeur visible
+    padding: 16,
+    boxSizing: 'border-box',
     margin: '0 auto',
     background: '#fff5f7',
   },
